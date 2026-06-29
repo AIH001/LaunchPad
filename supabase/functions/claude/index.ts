@@ -114,13 +114,15 @@ async function scoreJobs(anthropic: Anthropic, body: Record<string, unknown>) {
     `JOBS TO SCORE (return one entry per job_id):\n` +
     JSON.stringify(compactJobs, null, 2)
 
-  // Adaptive thinking: lets Claude actually reason about fit (the real work).
-  // Structured outputs: guarantees the JSON shape. max_tokens set explicitly
-  // per CLAUDE.md — generous headroom for thinking + one entry per job.
+  // Thinking is OFF here on purpose: scoring short blurbs doesn't need a
+  // deliberation pass, and adaptive thinking made this call ~45s. Claude still
+  // reasons about fit in its answer — it just responds directly. To trade speed
+  // back for a quality bump, add `thinking: { type: 'adaptive' }`.
+  // Structured outputs guarantee the JSON shape. max_tokens explicit per
+  // CLAUDE.md — ample for ~10 short entries without thinking.
   const message = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 16000,
-    thinking: { type: 'adaptive' },
+    max_tokens: 4000,
     output_config: { format: { type: 'json_schema', schema: SCORES_SCHEMA } },
     system,
     messages: [{ role: 'user', content: userContent }],

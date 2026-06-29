@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate, Link } from 'react-router-dom'
 import { Login, RequireAuth, useAuth } from './features/auth'
 import { ProfileForm } from './features/profile'
+import { JobsFeed } from './features/jobs'
 
 // Shared shell for logged-in pages: header with nav + sign-out.
 function AppShell({ children }: { children: React.ReactNode }) {
@@ -12,6 +13,9 @@ function AppShell({ children }: { children: React.ReactNode }) {
           <nav className="flex items-center gap-4">
             <Link to="/" className="text-lg font-semibold text-gray-900">
               LaunchPad
+            </Link>
+            <Link to="/jobs" className="text-sm text-gray-600 hover:text-gray-900">
+              Jobs
             </Link>
             <Link to="/profile" className="text-sm text-gray-600 hover:text-gray-900">
               Profile
@@ -54,12 +58,22 @@ function ProfilePage() {
   )
 }
 
+function JobsPage() {
+  return (
+    <AppShell>
+      <h2 className="mb-6 text-xl font-semibold text-gray-900">Job matches</h2>
+      <JobsFeed />
+    </AppShell>
+  )
+}
+
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route element={<RequireAuth />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/jobs" element={<JobsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
