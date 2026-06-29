@@ -1,1 +1,51 @@
 @import "tailwindcss";
+
+/* Design tokens from the Launchpad design doc. Defining them in @theme turns
+   each into Tailwind utilities — e.g. --color-accent => bg-accent/text-accent,
+   --font-display => font-display. Change a token here and the whole app
+   re-themes (the doc's "accent is themeable" requirement). */
+@theme {
+  --color-app: #f1ece2;
+  --color-main: #f4f0e8;
+  --color-sidebar: #ece5d8;
+  --color-surface: #fffefb;
+  --color-field: #fbf7f0;
+  --color-chip: #f1ece2;
+
+  --color-ink: #211c16;
+  --color-muted: #6b6358;
+  --color-faint: #9a917f;
+  --color-faint2: #a89e8a;
+
+  --color-accent: #d4663a;
+  --color-accent-ink: #b05a30;
+  --color-warm-ink: #7a5a3f;
+
+  --color-success: #2f8f63;
+  --color-success-ink: #3d6b50;
+  --color-warn: #c08a2d;
+  --color-warn-ink: #9a7a3f;
+
+  --color-line: #e8e0d2;
+  --color-line-soft: #e6ddcd;
+  --color-line-soft2: #e2dacc;
+  --color-line-sidebar: #ddd3c2;
+
+  --color-ai: #faf2ea;
+  --color-ai-line: #f0e2d3;
+
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-app);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+::placeholder {
+  color: #b8af9d;
+}

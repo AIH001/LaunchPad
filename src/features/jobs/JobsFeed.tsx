@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useJobs, type ScoredJob } from './useJobs'
+import { useSavedJobs } from './useSavedJobs'
 
 // Color the score badge by band so the feed is scannable.
 function scoreColor(score: number | null) {
@@ -9,7 +10,15 @@ function scoreColor(score: number | null) {
   return 'bg-red-100 text-red-700'
 }
 
-function JobCard({ job }: { job: ScoredJob }) {
+function JobCard({
+  job,
+  saved,
+  onToggleSave,
+}: {
+  job: ScoredJob
+  saved: boolean
+  onToggleSave: () => void
+}) {
   return (
     <li className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
@@ -45,20 +54,34 @@ function JobCard({ job }: { job: ScoredJob }) {
         </p>
       )}
 
-      <a
-        href={job.url}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-4 inline-block text-sm font-medium text-gray-900 underline underline-offset-2"
-      >
-        View &amp; apply →
-      </a>
+      <div className="mt-4 flex items-center gap-4">
+        <a
+          href={job.url}
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm font-medium text-gray-900 underline underline-offset-2"
+        >
+          View &amp; apply →
+        </a>
+        <button
+          type="button"
+          onClick={onToggleSave}
+          className={`rounded-lg border px-3 py-1 text-sm font-medium transition ${
+            saved
+              ? 'border-gray-900 bg-gray-900 text-white hover:bg-gray-800'
+              : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+          }`}
+        >
+          {saved ? 'Saved ✓' : 'Save'}
+        </button>
+      </div>
     </li>
   )
 }
 
 export function JobsFeed() {
   const { jobs, loading, scoring, error, search } = useJobs()
+  const { isSaved, save, unsave } = useSavedJobs()
   const [query, setQuery] = useState('developer')
   const [location, setLocation] = useState('')
 
@@ -103,7 +126,12 @@ export function JobsFeed() {
 
       <ul className="space-y-4">
         {jobs.map((job) => (
-          <JobCard key={job.id} job={job} />
+          <JobCard
+            key={job.id}
+            job={job}
+            saved={isSaved(job.id)}
+            onToggleSave={() => (isSaved(job.id) ? unsave(job.id) : save(job))}
+          />
         ))}
       </ul>
     </div>

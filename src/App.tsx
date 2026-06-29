@@ -1,68 +1,91 @@
-import { Routes, Route, Navigate, Link } from 'react-router-dom'
-import { Login, RequireAuth, useAuth } from './features/auth'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { Login, RequireAuth } from './features/auth'
 import { ProfileForm } from './features/profile'
-import { JobsFeed } from './features/jobs'
+import { JobsFeed, SavedJobsList } from './features/jobs'
+import { AppShell } from './components/AppShell'
 
-// Shared shell for logged-in pages: header with nav + sign-out.
-function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, signOut } = useAuth()
+function JobsPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="border-b border-gray-200 bg-white">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
-          <nav className="flex items-center gap-4">
-            <Link to="/" className="text-lg font-semibold text-gray-900">
-              LaunchPad
-            </Link>
-            <Link to="/jobs" className="text-sm text-gray-600 hover:text-gray-900">
-              Jobs
-            </Link>
-            <Link to="/profile" className="text-sm text-gray-600 hover:text-gray-900">
-              Profile
-            </Link>
-          </nav>
-          <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-gray-500 sm:inline">{user?.email}</span>
-            <button
-              type="button"
-              onClick={signOut}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
-            >
-              Sign out
-            </button>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-3xl px-6 py-8">{children}</main>
-    </div>
-  )
-}
-
-function Dashboard() {
-  return (
-    <AppShell>
-      <h2 className="text-xl font-semibold text-gray-900">Welcome</h2>
-      <p className="mt-2 text-gray-600">
-        Set up your <Link to="/profile" className="underline">profile</Link> to get started.
-      </p>
+    <AppShell
+      kicker="YOUR FEED"
+      title="Job matches"
+      subtitle="Ranked by how well each role fits your profile."
+    >
+      <JobsFeed />
     </AppShell>
   )
 }
 
 function ProfilePage() {
   return (
-    <AppShell>
-      <h2 className="mb-6 text-xl font-semibold text-gray-900">Your profile</h2>
+    <AppShell
+      kicker="ACCOUNT"
+      title="Your profile"
+      subtitle="Set it once — Claude uses this everywhere. Synced across devices."
+    >
       <ProfileForm />
     </AppShell>
   )
 }
 
-function JobsPage() {
+function SavedPage() {
   return (
-    <AppShell>
-      <h2 className="mb-6 text-xl font-semibold text-gray-900">Job matches</h2>
-      <JobsFeed />
+    <AppShell
+      kicker="YOUR FEED"
+      title="Saved jobs"
+      subtitle="Roles you've saved to revisit."
+    >
+      <SavedJobsList />
+    </AppShell>
+  )
+}
+
+// Placeholder for designed-but-not-yet-built feature screens.
+function ComingSoon({ what }: { what: string }) {
+  return (
+    <div className="rounded-[18px] border border-dashed border-[#d8cdbb] p-12 text-center">
+      <h3 className="font-display text-[19px] font-semibold text-ink">
+        {what} — coming soon
+      </h3>
+      <p className="mx-auto mt-2 max-w-[380px] text-[14px] text-muted">
+        This screen is designed and on the build list. We&apos;ll wire it up next.
+      </p>
+    </div>
+  )
+}
+
+function CoverPage() {
+  return (
+    <AppShell
+      kicker="DRAFTING"
+      title="Cover letters"
+      subtitle="One click from any role. Claude tailors it, you edit."
+    >
+      <ComingSoon what="Cover letters" />
+    </AppShell>
+  )
+}
+
+function DigestPage() {
+  return (
+    <AppShell
+      kicker="STAY SHARP"
+      title="Daily digest"
+      subtitle="Today's tech news, filtered to your stack and summarized."
+    >
+      <ComingSoon what="Daily digest" />
+    </AppShell>
+  )
+}
+
+function EventsPage() {
+  return (
+    <AppShell
+      kicker="NEARBY"
+      title="Events worth attending"
+      subtitle="Pulled by location — Claude flags which ones are worth your time."
+    >
+      <ComingSoon what="Events" />
     </AppShell>
   )
 }
@@ -72,9 +95,13 @@ function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route element={<RequireAuth />}>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<Navigate to="/jobs" replace />} />
         <Route path="/jobs" element={<JobsPage />} />
+        <Route path="/saved" element={<SavedPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/cover" element={<CoverPage />} />
+        <Route path="/digest" element={<DigestPage />} />
+        <Route path="/events" element={<EventsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
