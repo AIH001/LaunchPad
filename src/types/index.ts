@@ -36,7 +36,8 @@ export type SavedJob = {
 export type CoverLetter = {
   id: string
   user_id: string
-  job_id: string
+  job_title: string
+  company: string
   body: string
   created_at: string
   updated_at: string

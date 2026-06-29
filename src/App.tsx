@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { Login, RequireAuth } from './features/auth'
 import { ProfileForm } from './features/profile'
 import { JobsFeed, SavedJobsList } from './features/jobs'
+import { CoverLetters } from './features/coverLetter'
 import { AppShell } from './components/AppShell'
 
 function JobsPage() {
@@ -61,7 +62,7 @@ function CoverPage() {
       title="Cover letters"
       subtitle="One click from any role. Claude tailors it, you edit."
     >
-      <ComingSoon what="Cover letters" />
+      <CoverLetters />
     </AppShell>
   )
 }

@@ -111,6 +111,8 @@ Deno.serve(async (req) => {
         return await scoreJobs(anthropic, body)
       case 'parse_resume':
         return await parseResume(anthropic, supabase, body)
+      case 'draft_cover_letter':
+        return await draftCoverLetter(anthropic, body)
       default:
         return json({ error: `Unknown task: ${body.task}` }, 400)
     }
@@ -245,4 +247,45 @@ async function parseResume(
   }
 
   return json({ parsed: JSON.parse(textBlock.text) })
+}
+
+// Draft a tailored cover letter from a job + the candidate's parsed profile.
+// Free-form prose, so no structured output — we return the text directly.
+async function draftCoverLetter(anthropic: Anthropic, body: Record<string, unknown>) {
+  const job = body.job as
+    | { title?: string; company?: string; description?: string }
+    | undefined
+  const profile = body.profile as
+    | { summary?: string | null; skills?: string[] }
+    | undefined
+
+  if (!job?.title || !job?.company) {
+    return json({ error: 'Provide a job with title and company.' }, 400)
+  }
+
+  const system =
+    'You write tailored cover letters for early-career developers. 250-350 ' +
+    'words, warm but professional, specific to this role and candidate. Open ' +
+    'with genuine interest, connect their actual background to the role, and ' +
+    'close with a clear call to action. Avoid clichés like "I am writing to ' +
+    'express" and generic filler. Output ONLY the letter body — no subject ' +
+    'line, no placeholders like [Your Name].'
+
+  const userContent =
+    `ROLE: ${job.title} at ${job.company}\n` +
+    `JOB DESCRIPTION:\n${(job.description ?? '').slice(0, 2000)}\n\n` +
+    `CANDIDATE:\n` +
+    `Summary: ${profile?.summary ?? '(not provided)'}\n` +
+    `Skills: ${(profile?.skills ?? []).join(', ') || '(none listed)'}\n\n` +
+    `Write the cover letter body now.`
+
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1500,
+    system,
+    messages: [{ role: 'user', content: userContent }],
+  })
+
+  const textBlock = message.content.find((b) => b.type === 'text')
+  return json({ body: textBlock?.type === 'text' ? textBlock.text : '' })
 }

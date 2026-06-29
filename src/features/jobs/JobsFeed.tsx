@@ -259,7 +259,18 @@ export function JobsFeed() {
           onLocationChange={setLocation}
           onSelect={setSelectedId}
           onSubmit={handleSubmit}
-          onDraft={() => navigate('/cover')}
+          onDraft={() =>
+            selected &&
+            navigate('/cover', {
+              state: {
+                job: {
+                  title: selected.title,
+                  company: selected.company,
+                  description: selected.description,
+                },
+              },
+            })
+          }
         />
       )}
     </div>
