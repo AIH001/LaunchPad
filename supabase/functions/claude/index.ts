@@ -35,6 +35,32 @@ const SCORES_SCHEMA = {
   required: ['scores'],
 }
 
+// Schema for the daily digest: Claude returns a FILTERED, ranked subset of the
+// stories it was given (by id), each with a short summary, a one-line relevance
+// note, and a few tags. Returning ids (not the stories themselves) keeps the
+// payload small — the frontend joins back to the original story for title/url.
+const DIGEST_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string' },
+          summary: { type: 'string' },
+          relevance: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['id', 'summary', 'relevance', 'tags'],
+      },
+    },
+  },
+  required: ['items'],
+}
+
 // Schema for extracting a resume into structured data.
 const RESUME_SCHEMA = {
   type: 'object',
@@ -113,6 +139,8 @@ Deno.serve(async (req) => {
         return await parseResume(anthropic, supabase, body)
       case 'draft_cover_letter':
         return await draftCoverLetter(anthropic, body)
+      case 'summarize_digest':
+        return await summarizeDigest(anthropic, body)
       default:
         return json({ error: `Unknown task: ${body.task}` }, 400)
     }
@@ -288,4 +316,79 @@ async function draftCoverLetter(anthropic: Anthropic, body: Record<string, unkno
 
   const textBlock = message.content.find((b) => b.type === 'text')
   return json({ body: textBlock?.type === 'text' ? textBlock.text : '' })
+}
+
+// Build the daily digest: filter a batch of news stories down to the ones that
+// matter for this candidate's stack, rank them, and tag + summarize each.
+//
+// HONEST SCOPE NOTE: we send Claude the headlines + metadata, NOT the article
+// bodies. The genuine AI work here is the relevance filtering/ranking against the
+// profile's skills and the tagging — that can't be done by the news API alone.
+// The "summary" is Claude inferring from the headline + its own knowledge, so the
+// prompt forbids inventing specifics it can't know from the title.
+async function summarizeDigest(anthropic: Anthropic, body: Record<string, unknown>) {
+  const profile = body.profile as { skills?: string[] } | undefined
+  const stories = body.stories as Array<{
+    id: string
+    title: string
+    source: string
+  }> | undefined
+
+  if (!Array.isArray(stories) || stories.length === 0) {
+    return json({ error: 'Provide a non-empty stories array.' }, 400)
+  }
+
+  const skills = profile?.skills ?? []
+  const hasSkills = skills.length > 0
+
+  // Only the fields Claude needs to judge relevance — keeps the prompt lean.
+  const compactStories = stories.map((s) => ({
+    id: s.id,
+    title: s.title,
+    source: s.source,
+  }))
+
+  const system =
+    'You curate a daily tech-news digest for an early-career developer. From the ' +
+    'stories provided, select the ones most worth their time and return them ' +
+    'ranked best-first (aim for 6-8, fewer if little is relevant). For each: a ' +
+    '1-2 sentence summary, a one-line "why this matters to you" relevance note, ' +
+    'and 2-4 short topic tags (e.g. "React", "AI", "career"). ' +
+    'You are given only headlines and sources, NOT article text — base summaries ' +
+    'on the headline and general knowledge, and do NOT invent specific facts, ' +
+    'numbers, or quotes you cannot know from the title. Return story ids exactly ' +
+    'as given. Omit stories that are off-topic, low-value, or pure noise.'
+
+  const userContent =
+    (hasSkills
+      ? `CANDIDATE STACK / INTERESTS: ${skills.join(', ')}\n` +
+        `Prioritize stories relevant to this stack; the relevance line should ` +
+        `connect the story to their skills.\n\n`
+      : `The candidate hasn't listed skills yet — select the strongest general ` +
+        `tech stories and write a relevance line on why each matters broadly.\n\n`) +
+    `STORIES (return a ranked, filtered subset by id):\n` +
+    JSON.stringify(compactStories, null, 2)
+
+  // Structured outputs guarantee the JSON shape; thinking left off (this is a
+  // selection/tagging pass, not deep reasoning). max_tokens explicit per CLAUDE.md.
+  const message = await anthropic.messages.create({
+    model: 'claude-opus-4-8',
+    max_tokens: 3000,
+    output_config: { format: { type: 'json_schema', schema: DIGEST_SCHEMA } },
+    system,
+    messages: [{ role: 'user', content: userContent }],
+  })
+
+  const textBlock = message.content.find((b) => b.type === 'text')
+  if (!textBlock || textBlock.type !== 'text') {
+    return json(
+      { error: 'Claude returned no text content.', stop_reason: message.stop_reason },
+      502
+    )
+  }
+
+  const parsed = JSON.parse(textBlock.text) as {
+    items: Array<{ id: string; summary: string; relevance: string; tags: string[] }>
+  }
+  return json({ items: parsed.items })
 }

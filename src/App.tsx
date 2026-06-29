@@ -3,6 +3,7 @@ import { Login, RequireAuth } from './features/auth'
 import { ProfileForm } from './features/profile'
 import { JobsFeed, SavedJobsList } from './features/jobs'
 import { CoverLetters } from './features/coverLetter'
+import { DailyDigest } from './features/news'
 import { AppShell } from './components/AppShell'
 
 function JobsPage() {
@@ -74,7 +75,7 @@ function DigestPage() {
       title="Daily digest"
       subtitle="Today's tech news, filtered to your stack and summarized."
     >
-      <ComingSoon what="Daily digest" />
+      <DailyDigest />
     </AppShell>
   )
 }
