@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useJobs, type ScoredJob } from './useJobs'
 import { useSavedJobs } from './useSavedJobs'
+import { SavedJobsView } from './SavedJobsList'
 
 // Score band → progress-bar color + detail-panel label, per the design doc.
 function band(score: number | null) {
@@ -175,8 +176,10 @@ function JobDetailPanel({
 
 export function JobsFeed() {
   const { jobs, loading, scoring, error, search } = useJobs()
-  const { isSaved, save, unsave } = useSavedJobs()
+  const { saved, loading: savedLoading, error: savedError, isSaved, save, unsave } =
+    useSavedJobs()
   const navigate = useNavigate()
+  const [tab, setTab] = useState<'feed' | 'saved'>('feed')
   const [query, setQuery] = useState('developer')
   const [location, setLocation] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -199,16 +202,117 @@ export function JobsFeed() {
 
   return (
     <div>
-      <form onSubmit={handleSubmit} className="mb-6 flex flex-wrap gap-3">
+      {/* Feed / Saved segmented control */}
+      <div className="mb-5 inline-flex gap-1 rounded-[12px] border border-line-soft2 bg-field p-1">
+        {([
+          { key: 'feed', label: 'Feed' },
+          { key: 'saved', label: 'Saved', count: saved.length },
+        ] as const).map((t) => {
+          const active = tab === t.key
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setTab(t.key)}
+              className={`flex items-center gap-2 rounded-[9px] px-4 py-2 text-[13px] font-medium transition-colors ${
+                active
+                  ? 'bg-surface text-ink shadow-[0_1px_2px_rgba(0,0,0,.04)]'
+                  : 'text-muted hover:text-ink'
+              }`}
+            >
+              {t.label}
+              {'count' in t && t.count > 0 && (
+                <span
+                  className={`inline-flex h-5 min-w-5 items-center justify-center rounded-[6px] px-[6px] font-mono text-[11px] ${
+                    active ? 'bg-accent text-white' : 'bg-line-soft text-faint'
+                  }`}
+                >
+                  {t.count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'saved' ? (
+        <SavedJobsView
+          saved={saved}
+          loading={savedLoading}
+          error={savedError}
+          unsave={unsave}
+        />
+      ) : (
+        <FeedView
+          jobs={jobs}
+          loading={loading}
+          scoring={scoring}
+          error={error}
+          query={query}
+          location={location}
+          selectedId={selectedId}
+          selected={selected}
+          isSaved={isSaved}
+          save={save}
+          unsave={unsave}
+          onQueryChange={setQuery}
+          onLocationChange={setLocation}
+          onSelect={setSelectedId}
+          onSubmit={handleSubmit}
+          onDraft={() => navigate('/cover')}
+        />
+      )}
+    </div>
+  )
+}
+
+function FeedView({
+  jobs,
+  loading,
+  scoring,
+  error,
+  query,
+  location,
+  selectedId,
+  selected,
+  isSaved,
+  save,
+  unsave,
+  onQueryChange,
+  onLocationChange,
+  onSelect,
+  onSubmit,
+  onDraft,
+}: {
+  jobs: ScoredJob[]
+  loading: boolean
+  scoring: boolean
+  error: string | null
+  query: string
+  location: string
+  selectedId: string | null
+  selected: ScoredJob | null
+  isSaved: (id: string) => boolean
+  save: (job: ScoredJob) => void
+  unsave: (id: string) => void
+  onQueryChange: (v: string) => void
+  onLocationChange: (v: string) => void
+  onSelect: (id: string) => void
+  onSubmit: (e: FormEvent) => void
+  onDraft: () => void
+}) {
+  return (
+    <div>
+      <form onSubmit={onSubmit} className="mb-6 flex flex-wrap gap-3">
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Role, e.g. frontend developer"
           className="min-w-48 flex-1 rounded-[11px] border border-line-soft2 bg-field px-[14px] py-3 text-[14px] focus:border-faint focus:outline-none"
         />
         <input
           value={location}
-          onChange={(e) => setLocation(e.target.value)}
+          onChange={(e) => onLocationChange(e.target.value)}
           placeholder="Location (optional)"
           className="min-w-40 flex-1 rounded-[11px] border border-line-soft2 bg-field px-[14px] py-3 text-[14px] focus:border-faint focus:outline-none"
         />
@@ -241,7 +345,7 @@ export function JobsFeed() {
                 key={job.id}
                 job={job}
                 selected={job.id === selectedId}
-                onSelect={() => setSelectedId(job.id)}
+                onSelect={() => onSelect(job.id)}
               />
             ))}
           </div>
@@ -254,7 +358,7 @@ export function JobsFeed() {
               onToggleSave={() =>
                 isSaved(selected.id) ? unsave(selected.id) : save(selected)
               }
-              onDraft={() => navigate('/cover')}
+              onDraft={onDraft}
             />
           )}
         </div>

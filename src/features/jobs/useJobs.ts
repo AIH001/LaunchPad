@@ -61,7 +61,7 @@ export function useJobs() {
         if (listings.length === 0) return
 
         const profilePayload = {
-          resume_text: profile?.resume_text ?? null,
+          summary: profile?.resume_parsed?.summary ?? null,
           skills: profile?.skills ?? [],
           interests: profile?.interests ?? [],
           location: profile?.location ?? null,

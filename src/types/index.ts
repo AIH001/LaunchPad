@@ -1,6 +1,22 @@
+// Structured resume data Claude extracts from an uploaded PDF/text file.
+export type ResumeParsed = {
+  summary: string
+  skills: string[]
+  education: Array<{ school: string; credential: string; year: string }>
+  experience: Array<{
+    title: string
+    company: string
+    dates: string
+    highlights: string
+  }>
+  qualifications: string[]
+  years_experience: number
+}
+
 export type Profile = {
   id: string
-  resume_text: string | null
+  resume_file_path: string | null
+  resume_parsed: ResumeParsed | null
   skills: string[]
   interests: string[]
   location: string | null

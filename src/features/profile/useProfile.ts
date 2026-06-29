@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../auth'
-import type { Profile } from '../../types'
+import type { Profile, ResumeParsed } from '../../types'
 
-// The editable slice of a profile — everything except the server-managed
-// columns (id comes from the auth user; timestamps are set by the DB).
-export type ProfileInput = {
-  resume_text: string | null
+// A partial update of the editable columns. Partial so different flows can save
+// just what they touch — the form saves skills/interests/location, the resume
+// upload saves resume_file_path/resume_parsed — without clobbering the rest.
+export type ProfileUpdate = Partial<{
+  resume_file_path: string | null
+  resume_parsed: ResumeParsed | null
   skills: string[]
   interests: string[]
   location: string | null
-}
+}>
 
 export function useProfile() {
   const { user } = useAuth()
@@ -47,12 +49,12 @@ export function useProfile() {
   // whether this is the user's first save. RLS makes this safe: the insert/update
   // policies both require id = auth.uid(), so a user can only write their own row.
   const save = useCallback(
-    async (input: ProfileInput) => {
+    async (updates: ProfileUpdate) => {
       if (!user) return { error: 'Not signed in' }
 
       const { data, error } = await supabase
         .from('profiles')
-        .upsert({ id: user.id, ...input })
+        .upsert({ id: user.id, ...updates })
         .select()
         .single()
 

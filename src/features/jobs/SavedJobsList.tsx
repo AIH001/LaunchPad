@@ -1,11 +1,28 @@
 import { useSavedJobs } from './useSavedJobs'
 import type { ScoredJob } from './useJobs'
+import type { SavedJob } from '../../types'
 
 const glyph = (company?: string) => (company?.[0] ?? '?').toUpperCase()
 
+// Thin wrapper that owns its own data — used by the standalone /saved route.
 export function SavedJobsList() {
   const { saved, loading, error, unsave } = useSavedJobs()
+  return <SavedJobsView saved={saved} loading={loading} error={error} unsave={unsave} />
+}
 
+// Presentational list. Takes data as props so the Job Matches screen can render
+// it from the same useSavedJobs instance that powers the Save buttons + tab count.
+export function SavedJobsView({
+  saved,
+  loading,
+  error,
+  unsave,
+}: {
+  saved: SavedJob[]
+  loading: boolean
+  error: string | null
+  unsave: (externalId: string) => void
+}) {
   if (loading) return <p className="text-[14px] text-muted">Loading saved jobs…</p>
   if (error) return <p className="text-[14px] text-[#b4452f]">{error}</p>
   if (saved.length === 0) {

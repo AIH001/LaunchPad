@@ -1,3 +1,3 @@
 export { useProfile } from './useProfile'
 export { ProfileForm } from './ProfileForm'
-export type { ProfileInput } from './useProfile'
+export type { ProfileUpdate } from './useProfile'

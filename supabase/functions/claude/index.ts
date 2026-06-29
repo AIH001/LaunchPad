@@ -6,7 +6,8 @@
 // The ANTHROPIC_API_KEY lives only as a Supabase secret — it is read here on the
 // server and never reaches the browser.
 import Anthropic from 'npm:@anthropic-ai/sdk'
-import { createClient } from 'npm:@supabase/supabase-js'
+import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js'
+import { encodeBase64 } from 'jsr:@std/encoding/base64'
 import { corsHeaders, json } from '../_shared/cors.ts'
 
 // JSON Schema we force Claude's answer into. Structured outputs guarantee the
@@ -32,6 +33,53 @@ const SCORES_SCHEMA = {
     },
   },
   required: ['scores'],
+}
+
+// Schema for extracting a resume into structured data.
+const RESUME_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    summary: { type: 'string' },
+    skills: { type: 'array', items: { type: 'string' } },
+    education: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          school: { type: 'string' },
+          credential: { type: 'string' },
+          year: { type: 'string' },
+        },
+        required: ['school', 'credential', 'year'],
+      },
+    },
+    experience: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          title: { type: 'string' },
+          company: { type: 'string' },
+          dates: { type: 'string' },
+          highlights: { type: 'string' },
+        },
+        required: ['title', 'company', 'dates', 'highlights'],
+      },
+    },
+    qualifications: { type: 'array', items: { type: 'string' } },
+    years_experience: { type: 'integer' },
+  },
+  required: [
+    'summary',
+    'skills',
+    'education',
+    'experience',
+    'qualifications',
+    'years_experience',
+  ],
 }
 
 Deno.serve(async (req) => {
@@ -61,6 +109,8 @@ Deno.serve(async (req) => {
     switch (body.task) {
       case 'score_jobs':
         return await scoreJobs(anthropic, body)
+      case 'parse_resume':
+        return await parseResume(anthropic, supabase, body)
       default:
         return json({ error: `Unknown task: ${body.task}` }, 400)
     }
@@ -72,7 +122,7 @@ Deno.serve(async (req) => {
 // Score a batch of jobs against the user's profile in a single Claude call.
 async function scoreJobs(anthropic: Anthropic, body: Record<string, unknown>) {
   const profile = body.profile as {
-    resume_text?: string | null
+    summary?: string | null
     skills?: string[]
     interests?: string[]
     location?: string | null
@@ -110,7 +160,7 @@ async function scoreJobs(anthropic: Anthropic, body: Record<string, unknown>) {
     `Skills: ${(profile.skills ?? []).join(', ') || '(none listed)'}\n` +
     `Interests: ${(profile.interests ?? []).join(', ') || '(none listed)'}\n` +
     `Location: ${profile.location ?? '(not set)'}\n` +
-    `Resume: ${(profile.resume_text ?? '(not provided)').slice(0, 4000)}\n\n` +
+    `Resume summary: ${(profile.summary ?? '(not provided)').slice(0, 4000)}\n\n` +
     `JOBS TO SCORE (return one entry per job_id):\n` +
     JSON.stringify(compactJobs, null, 2)
 
@@ -138,4 +188,61 @@ async function scoreJobs(anthropic: Anthropic, body: Record<string, unknown>) {
     scores: Array<{ job_id: string; score: number; why_fit: string; gaps: string }>
   }
   return json({ scores: parsed.scores })
+}
+
+// Read a resume file from Storage and extract it into structured data. The file
+// is downloaded with the caller's own token, so Storage RLS still applies — a
+// user can only parse a file under their own folder.
+async function parseResume(
+  anthropic: Anthropic,
+  supabase: SupabaseClient,
+  body: Record<string, unknown>
+) {
+  const path = body.path as string | undefined
+  if (!path) return json({ error: 'Provide a storage path.' }, 400)
+
+  const { data: file, error } = await supabase.storage.from('resumes').download(path)
+  if (error || !file) {
+    return json({ error: `Could not read file: ${error?.message ?? 'not found'}` }, 400)
+  }
+
+  const isPdf = path.toLowerCase().endsWith('.pdf')
+  const instruction =
+    'Extract this resume into the structured schema. Use the candidate\'s own ' +
+    'wording where possible; do not invent facts. summary is 2-3 sentences. ' +
+    'years_experience is your best integer estimate of total professional years.'
+
+  // PDFs go to Claude as a document block (it reads them natively); text files
+  // go in as plain text.
+  const content = isPdf
+    ? [
+        {
+          type: 'document' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: 'application/pdf' as const,
+            data: encodeBase64(new Uint8Array(await file.arrayBuffer())),
+          },
+        },
+        { type: 'text' as const, text: instruction },
+      ]
+    : `${instruction}\n\nRESUME:\n${(await file.text()).slice(0, 20000)}`
+
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 4000,
+    output_config: { format: { type: 'json_schema', schema: RESUME_SCHEMA } },
+    system: 'You extract accurate structured data from resumes.',
+    messages: [{ role: 'user', content }],
+  })
+
+  const textBlock = message.content.find((b) => b.type === 'text')
+  if (!textBlock || textBlock.type !== 'text') {
+    return json(
+      { error: 'Claude returned no text content.', stop_reason: message.stop_reason },
+      502
+    )
+  }
+
+  return json({ parsed: JSON.parse(textBlock.text) })
 }

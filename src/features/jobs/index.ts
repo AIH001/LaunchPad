@@ -1,5 +1,5 @@
 export { useJobs } from './useJobs'
 export { JobsFeed } from './JobsFeed'
 export { useSavedJobs } from './useSavedJobs'
-export { SavedJobsList } from './SavedJobsList'
+export { SavedJobsList, SavedJobsView } from './SavedJobsList'
 export type { ScoredJob } from './useJobs'
