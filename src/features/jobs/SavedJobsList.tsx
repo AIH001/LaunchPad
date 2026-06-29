@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useSavedJobs } from './useSavedJobs'
 import type { ScoredJob } from './useJobs'
 import type { SavedJob } from '../../types'
@@ -23,6 +24,7 @@ export function SavedJobsView({
   error: string | null
   unsave: (externalId: string) => void
 }) {
+  const navigate = useNavigate()
   if (loading) return <p className="text-[14px] text-muted">Loading saved jobs…</p>
   if (error) return <p className="text-[14px] text-[#b4452f]">{error}</p>
   if (saved.length === 0) {
@@ -83,6 +85,23 @@ export function SavedJobsView({
                   View &amp; apply →
                 </a>
               )}
+              <button
+                type="button"
+                onClick={() =>
+                  navigate('/cover', {
+                    state: {
+                      job: {
+                        title: job.title,
+                        company: job.company,
+                        description: job.description,
+                      },
+                    },
+                  })
+                }
+                className="rounded-[10px] border border-line-soft2 px-3 py-[6px] text-[13px] font-medium text-muted transition-colors hover:bg-field"
+              >
+                Draft cover letter
+              </button>
               <button
                 type="button"
                 onClick={() => job.id && unsave(job.id)}

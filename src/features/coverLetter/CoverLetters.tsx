@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useCoverLetters, type DraftJob } from './useCoverLetters'
+import type { CoverLetter } from '../../types'
 
 export function CoverLetters() {
   const location = useLocation()
@@ -17,6 +18,7 @@ export function CoverLetters() {
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState('')
+  const [viewing, setViewing] = useState<CoverLetter | null>(null)
   const started = useRef(false)
 
   useEffect(() => {
@@ -48,8 +50,8 @@ export function CoverLetters() {
     }
   }
 
-  const copy = async () => {
-    await navigator.clipboard.writeText(text)
+  const copyText = async (t: string) => {
+    await navigator.clipboard.writeText(t)
     setToast('Copied to clipboard')
   }
 
@@ -97,7 +99,7 @@ export function CoverLetters() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={copy}
+                onClick={() => copyText(text)}
                 className="rounded-[9px] bg-accent px-4 py-[9px] text-[13px] font-semibold text-white shadow-[0_2px_8px_rgba(190,80,40,.22)] hover:brightness-95"
               >
                 Copy
@@ -169,24 +171,99 @@ export function CoverLetters() {
         <ul className="flex flex-col gap-[11px]">
           {letters.map((l) => (
             <li key={l.id} className="rounded-[14px] border border-line bg-surface p-5">
-              <div className="flex items-start justify-between gap-4">
+              <div className="mb-3 flex items-start justify-between gap-4">
                 <div className="font-display text-[16px] font-semibold">
                   {l.job_title} · {l.company}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => remove(l.id)}
-                  className="rounded-[10px] border border-line-soft2 px-3 py-[6px] text-[13px] font-medium text-muted hover:bg-field"
-                >
-                  Delete
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setViewing(l)}
+                    className="rounded-[10px] border border-line-soft2 px-3 py-[6px] text-[13px] font-medium text-muted hover:bg-field"
+                  >
+                    View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyText(l.body)}
+                    className="rounded-[10px] bg-accent px-3 py-[6px] text-[13px] font-semibold text-white shadow-[0_2px_8px_rgba(190,80,40,.22)] hover:brightness-95"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(l.id)}
+                    className="rounded-[10px] border border-line-soft2 px-3 py-[6px] text-[13px] font-medium text-muted hover:bg-field"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-              <p className="mt-3 line-clamp-3 whitespace-pre-wrap text-[13.5px] leading-[1.5] text-[#5a5347]">
+              <p className="line-clamp-3 whitespace-pre-wrap text-[13.5px] leading-[1.5] text-[#5a5347]">
                 {l.body}
               </p>
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Full-letter modal */}
+      {viewing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm"
+          onClick={() => setViewing(null)}
+        >
+          <div
+            className="flex max-h-[80vh] w-full max-w-[640px] flex-col rounded-[18px] border border-line bg-surface shadow-[0_20px_60px_rgba(40,30,15,.25)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-line-soft px-6 py-4">
+              <div>
+                <div className="font-mono text-[11px] tracking-[.09em] text-faint2">
+                  COVER LETTER
+                </div>
+                <div className="font-display text-[18px] font-semibold">
+                  {viewing.job_title} · {viewing.company}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewing(null)}
+                aria-label="Close"
+                className="text-[22px] leading-none text-faint hover:text-ink"
+              >
+                ×
+              </button>
+            </div>
+            <div className="overflow-auto px-6 py-5">
+              <p className="whitespace-pre-wrap text-[14px] leading-[1.65] text-ink">
+                {viewing.body}
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-line-soft px-6 py-4">
+              <button
+                type="button"
+                onClick={() => copyText(viewing.body)}
+                className="rounded-[10px] bg-accent px-4 py-[9px] text-[13px] font-semibold text-white shadow-[0_2px_8px_rgba(190,80,40,.22)] hover:brightness-95"
+              >
+                Copy
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewing(null)}
+                className="rounded-[10px] border border-line-soft2 px-4 py-[9px] text-[13px] font-medium text-muted hover:bg-field"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-[11px] bg-ink px-5 py-3 text-[13.5px] font-medium text-app shadow-[0_8px_28px_rgba(0,0,0,.22)]">
+          {toast}
+        </div>
       )}
     </div>
   )
