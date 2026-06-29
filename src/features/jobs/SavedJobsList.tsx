@@ -1,53 +1,67 @@
 import { useSavedJobs } from './useSavedJobs'
 import type { ScoredJob } from './useJobs'
 
+const glyph = (company?: string) => (company?.[0] ?? '?').toUpperCase()
+
 export function SavedJobsList() {
   const { saved, loading, error, unsave } = useSavedJobs()
 
-  if (loading) return <p className="text-sm text-gray-500">Loading saved jobs…</p>
-  if (error) return <p className="text-sm text-red-600">{error}</p>
+  if (loading) return <p className="text-[14px] text-muted">Loading saved jobs…</p>
+  if (error) return <p className="text-[14px] text-[#b4452f]">{error}</p>
   if (saved.length === 0) {
     return (
-      <p className="text-sm text-gray-500">
-        No saved jobs yet. Save matches from the Jobs page.
-      </p>
+      <div className="rounded-[18px] border border-dashed border-[#d8cdbb] p-12 text-center">
+        <h3 className="font-display text-[19px] font-semibold text-ink">
+          No saved jobs yet
+        </h3>
+        <p className="mx-auto mt-2 max-w-[380px] text-[14px] text-muted">
+          Save matches from the Job Matches page to revisit them here.
+        </p>
+      </div>
     )
   }
 
   return (
-    <ul className="space-y-4">
+    <ul className="flex max-w-[760px] flex-col gap-[11px]">
       {saved.map((row) => {
         const job = row.job_payload as Partial<ScoredJob>
         return (
           <li
             key={row.id}
-            className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+            className="rounded-[14px] border border-line bg-surface p-[18px]"
           >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h3 className="font-semibold text-gray-900">{job.title}</h3>
-                <p className="text-sm text-gray-500">
-                  {job.company} · {job.location || 'Location N/A'}
-                </p>
+            <div className="flex items-start gap-[14px]">
+              <div className="flex h-11 w-11 flex-none items-center justify-center rounded-[11px] bg-ink font-display text-[18px] font-semibold text-app">
+                {glyph(job.company)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[15px] font-semibold tracking-[-.01em]">
+                  {job.title}
+                </div>
+                <div className="mt-[2px] text-[13px] text-muted">
+                  {job.company} · {job.location || 'Remote / N/A'}
+                </div>
+                {row.match_reasoning && (
+                  <p className="mt-[10px] text-[13.5px] leading-[1.45] text-[#5a5347]">
+                    {row.match_reasoning}
+                  </p>
+                )}
               </div>
               {row.match_score !== null && (
-                <span className="shrink-0 rounded-full bg-gray-100 px-3 py-1 text-sm font-semibold text-gray-700">
+                <div className="flex-none font-display text-[22px] font-bold leading-none">
                   {row.match_score}
-                </span>
+                  <span className="text-[12px] font-medium text-faint2">%</span>
+                </div>
               )}
             </div>
 
-            {row.match_reasoning && (
-              <p className="mt-3 text-sm text-gray-700">{row.match_reasoning}</p>
-            )}
-
-            <div className="mt-4 flex items-center gap-4">
+            <div className="mt-4 flex items-center gap-4 pl-[58px]">
               {job.url && (
                 <a
                   href={job.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sm font-medium text-gray-900 underline underline-offset-2"
+                  className="text-[13px] font-medium text-accent-ink underline underline-offset-2"
                 >
                   View &amp; apply →
                 </a>
@@ -55,7 +69,7 @@ export function SavedJobsList() {
               <button
                 type="button"
                 onClick={() => job.id && unsave(job.id)}
-                className="rounded-lg border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                className="rounded-[10px] border border-line-soft2 px-3 py-[6px] text-[13px] font-medium text-muted transition-colors hover:bg-field"
               >
                 Remove
               </button>
