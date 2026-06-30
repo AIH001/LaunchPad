@@ -19,7 +19,7 @@ Users sign up, set up a profile once (resume + skills + interests + location), t
 - **API proxying:** Supabase Edge Functions (Deno) — all third-party API calls go through here
 - **Styling: see the design document below
 - **AI:** Anthropic Claude API, model `claude-sonnet-4-6`
-- **External data:** Adzuna API (jobs), NewsAPI (tech news), Eventbrite or Meetup API (events)
+- **External data:** Adzuna API (jobs), Hacker News (tech news), Ticketmaster Discovery + Luma (events)
 - **Deploy:** Vercel (frontend), Supabase (backend)
 
 ## Project structure
@@ -102,9 +102,13 @@ Edge Function secrets (set via `supabase secrets set`, never in the repo):
 ANTHROPIC_API_KEY
 ADZUNA_APP_ID
 ADZUNA_APP_KEY
-NEWS_API_KEY
-EVENTS_API_KEY
+TICKETMASTER_API_KEY
 ```
+
+Keyless sources (no secret needed): tech news uses Hacker News (Algolia), and
+events also pulls Luma's public discover feed (unofficial endpoint). Meetup is a
+documented stub in the `events` function — enabling it needs a paid Meetup Pro
+subscription to create an OAuth consumer.
 # Handoff: Launchpad — design document
 
 ---
