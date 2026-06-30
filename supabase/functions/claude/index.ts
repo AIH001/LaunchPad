@@ -1,7 +1,7 @@
 // claude: the single Edge Function that all Claude-powered features route through
 // (see CLAUDE.md — "centralize Claude calls in the claude Edge Function").
-// Dispatches by a `task` field. Today it scores jobs; cover letters / digests
-// will be added as new tasks here.
+// Dispatches by a `task` field: score_jobs, parse_resume, draft_cover_letter,
+// digest_news, score_events.
 //
 // The ANTHROPIC_API_KEY lives only as a Supabase secret — it is read here on the
 // server and never reaches the browser.
@@ -113,6 +113,8 @@ Deno.serve(async (req) => {
         return await parseResume(anthropic, supabase, body)
       case 'draft_cover_letter':
         return await draftCoverLetter(anthropic, body)
+      case 'score_events':
+        return await scoreEvents(anthropic, body)
       default:
         return json({ error: `Unknown task: ${body.task}` }, 400)
     }
@@ -288,4 +290,97 @@ async function draftCoverLetter(anthropic: Anthropic, body: Record<string, unkno
 
   const textBlock = message.content.find((b) => b.type === 'text')
   return json({ body: textBlock?.type === 'text' ? textBlock.text : '' })
+}
+
+const EVENTS_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    verdicts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          event_id: { type: 'string' },
+          verdict: { type: 'string', enum: ['worth_it', 'optional'] },
+          take: { type: 'string' },
+          tags: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['event_id', 'verdict', 'take', 'tags'],
+      },
+    },
+  },
+  required: ['verdicts'],
+}
+
+async function scoreEvents(anthropic: Anthropic, body: Record<string, unknown>) {
+  const events = body.events as Array<{
+    id: string
+    title: string
+    description: string
+    venue: string
+    isFree: boolean
+  }> | undefined
+  const profile = body.profile as {
+    skills?: string[]
+    interests?: string[]
+    location?: string | null
+  } | undefined
+
+  if (!Array.isArray(events) || events.length === 0) {
+    return json({ error: 'Provide a non-empty events array.' }, 400)
+  }
+
+  const system =
+    'You are a career advisor for early-career developers. Given a list of tech ' +
+    'events and a developer profile, decide which are worth attending. ' +
+    '"worth_it" = clear networking or learning value aligned to their skills/interests. ' +
+    '"optional" = peripheral or duplicative. ' +
+    'Give a concise 1-2 sentence "take" explaining the verdict. ' +
+    'Include 2-3 short topic tags (e.g. "React", "Networking", "ML").'
+
+  const userContent =
+    `DEVELOPER PROFILE:\n` +
+    `Skills: ${(profile?.skills ?? []).join(', ') || '(none)'}\n` +
+    `Interests: ${(profile?.interests ?? []).join(', ') || '(none)'}\n` +
+    `Location: ${profile?.location ?? '(not set)'}\n\n` +
+    `EVENTS TO EVALUATE:\n` +
+    JSON.stringify(
+      events.map((e) => ({
+        id: e.id,
+        title: e.title,
+        description: e.description.slice(0, 400),
+        venue: e.venue,
+        is_free: e.isFree,
+      })),
+      null,
+      2
+    )
+
+  const message = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 3000,
+    output_config: { format: { type: 'json_schema', schema: EVENTS_SCHEMA } },
+    system,
+    messages: [{ role: 'user', content: userContent }],
+  })
+
+  const textBlock = message.content.find((b) => b.type === 'text')
+  if (!textBlock || textBlock.type !== 'text') {
+    return json(
+      { error: 'Claude returned no text content.', stop_reason: message.stop_reason },
+      502
+    )
+  }
+
+  const parsed = JSON.parse(textBlock.text) as {
+    verdicts: Array<{
+      event_id: string
+      verdict: 'worth_it' | 'optional'
+      take: string
+      tags: string[]
+    }>
+  }
+  return json({ verdicts: parsed.verdicts })
 }

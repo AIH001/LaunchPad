@@ -3,6 +3,7 @@ import { Login, RequireAuth } from './features/auth'
 import { ProfileForm } from './features/profile'
 import { JobsFeed, SavedJobsList } from './features/jobs'
 import { CoverLetters } from './features/coverLetter'
+import { EventsFeed } from './features/events'
 import { AppShell } from './components/AppShell'
 
 function JobsPage() {
@@ -86,7 +87,7 @@ function EventsPage() {
       title="Events worth attending"
       subtitle="Pulled by location — Claude flags which ones are worth your time."
     >
-      <ComingSoon what="Events" />
+      <EventsFeed />
     </AppShell>
   )
 }
