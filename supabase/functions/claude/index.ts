@@ -423,7 +423,8 @@ async function scoreEvents(anthropic: Anthropic, body: Record<string, unknown>) 
     title: string
     description: string
     venue: string
-    isFree: boolean
+    category: string
+    isVirtual: boolean
   }> | undefined
   const profile = body.profile as {
     skills?: string[]
@@ -455,7 +456,8 @@ async function scoreEvents(anthropic: Anthropic, body: Record<string, unknown>) 
         title: e.title,
         description: e.description.slice(0, 400),
         venue: e.venue,
-        is_free: e.isFree,
+        category: e.category,
+        is_virtual: e.isVirtual,
       })),
       null,
       2

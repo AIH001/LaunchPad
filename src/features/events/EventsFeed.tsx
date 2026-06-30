@@ -1,16 +1,21 @@
 import { Link } from 'react-router-dom'
 import { useProfile } from '../profile'
 import { useEvents } from './useEvents'
-import type { Event } from '../../types'
+import type { EventSource, ScoredEvent } from '../../types'
 
-function formatEventDate(dateLocal: string) {
-  // dateLocal is an ISO local-time string from Eventbrite with no timezone offset
-  // (e.g. "2024-07-15T18:00:00"). Splitting on 'T' avoids UTC-shift issues.
-  const [datePart, timePart] = dateLocal.split('T')
-  const [year, month, day] = datePart.split('-').map(Number)
-  const [hour, minute] = (timePart ?? '00:00').split(':').map(Number)
-  const d = new Date(year, month - 1, day, hour, minute)
+const SOURCE_LABEL: Record<EventSource, string> = {
+  ticketmaster: 'Ticketmaster',
+  luma: 'Luma',
+  meetup: 'Meetup',
+}
 
+// Format an ISO 8601 instant (UTC) into the date-block parts, rendered in the
+// viewer's local timezone.
+function formatEventDate(iso: string) {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) {
+    return { dow: '', mon: '', day: '', time: '' }
+  }
   return {
     dow: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(),
     mon: d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
@@ -28,10 +33,15 @@ function AccentDiamond() {
   )
 }
 
-function EventCard({ event }: { event: Event }) {
-  const { dow, mon, day, time } = formatEventDate(event.dateLocal)
+function EventCard({ event }: { event: ScoredEvent }) {
+  const { dow, mon, day, time } = formatEventDate(event.startDate)
   const isWorthIt = event.verdict === 'worth_it'
-  const venueLine = [event.venue, event.city].filter(Boolean).join(' · ')
+  const venueLine = [
+    event.isVirtual ? 'Virtual' : event.location.display,
+    `via ${SOURCE_LABEL[event.source]}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <div className="flex items-start gap-[18px] rounded-[16px] border border-line bg-surface p-[20px_22px] shadow-[0_6px_24px_rgba(40,30,15,.05)]">
@@ -76,10 +86,8 @@ function EventCard({ event }: { event: Event }) {
           )}
         </div>
 
-        {/* Venue */}
-        {venueLine && (
-          <p className="mt-1 text-[13px] text-muted">{venueLine}</p>
-        )}
+        {/* Venue · source */}
+        {venueLine && <p className="mt-1 text-[13px] text-muted">{venueLine}</p>}
 
         {/* Claude's take box */}
         {!event.scoring && event.take && (
@@ -94,24 +102,22 @@ function EventCard({ event }: { event: Event }) {
           </div>
         )}
 
-        {/* Tags */}
-        {event.tags.length > 0 && (
-          <div className="mt-[13px] flex flex-wrap gap-[7px]">
-            {event.isFree && (
-              <span className="rounded-[7px] border border-[#d2e0cb] bg-[#eef3ec] px-[9px] py-1 font-mono text-[11px] text-success-ink">
-                Free
-              </span>
-            )}
-            {event.tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-[7px] border border-line-soft bg-chip px-[9px] py-1 font-mono text-[11px] text-muted"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
+        {/* Tags (category + Claude's topic tags) */}
+        <div className="mt-[13px] flex flex-wrap gap-[7px]">
+          {event.category && (
+            <span className="rounded-[7px] border border-line-soft bg-chip px-[9px] py-1 font-mono text-[11px] text-muted">
+              {event.category}
+            </span>
+          )}
+          {event.tags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-[7px] border border-line-soft bg-chip px-[9px] py-1 font-mono text-[11px] text-muted"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   )
@@ -132,7 +138,7 @@ function SkeletonCard() {
 
 export function EventsFeed() {
   const { profile } = useProfile()
-  const { events, loading, error, refresh } = useEvents()
+  const { events, loading, error, degradedSources, refresh } = useEvents()
 
   if (!profile?.location) {
     return (
@@ -181,6 +187,17 @@ export function EventsFeed() {
           Refresh
         </button>
       </div>
+
+      {/* Soft notice when a source degraded — feed is still usable. */}
+      {!loading && degradedSources.length > 0 && (
+        <p className="mb-[13px] rounded-[10px] border border-ai-line bg-ai px-[12px] py-2 font-mono text-[11px] text-warm-ink">
+          Couldn't reach{' '}
+          {degradedSources
+            .map((s) => SOURCE_LABEL[s as EventSource] ?? s)
+            .join(', ')}{' '}
+          — showing results from the other sources.
+        </p>
+      )}
 
       <div className="flex flex-col gap-[13px]">
         {loading ? (
