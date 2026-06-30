@@ -374,7 +374,7 @@ async function summarizeDigest(anthropic: Anthropic, body: Record<string, unknow
   // Structured outputs guarantee the JSON shape; thinking left off (this is a
   // selection/tagging pass, not deep reasoning). max_tokens explicit per CLAUDE.md.
   const message = await anthropic.messages.create({
-    model: 'claude-opus-4-8',
+    model: 'claude-sonnet-4-6',
     max_tokens: 3000,
     output_config: { format: { type: 'json_schema', schema: DIGEST_SCHEMA } },
     system,
