@@ -42,3 +42,18 @@ export type CoverLetter = {
   created_at: string
   updated_at: string
 }
+
+export type Event = {
+  id: string
+  title: string
+  description: string
+  venue: string
+  city: string
+  dateLocal: string
+  url: string
+  isFree: boolean
+  verdict: 'worth_it' | 'optional' | null
+  take: string | null
+  tags: string[]
+  scoring: boolean
+}

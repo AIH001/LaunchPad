@@ -4,6 +4,7 @@ import { ProfileForm } from './features/profile'
 import { JobsFeed, SavedJobsList } from './features/jobs'
 import { CoverLetters } from './features/coverLetter'
 import { DailyDigest } from './features/news'
+import { EventsFeed } from './features/events'
 import { AppShell } from './components/AppShell'
 
 function JobsPage() {
@@ -42,20 +43,6 @@ function SavedPage() {
   )
 }
 
-// Placeholder for designed-but-not-yet-built feature screens.
-function ComingSoon({ what }: { what: string }) {
-  return (
-    <div className="rounded-[18px] border border-dashed border-[#d8cdbb] p-12 text-center">
-      <h3 className="font-display text-[19px] font-semibold text-ink">
-        {what} — coming soon
-      </h3>
-      <p className="mx-auto mt-2 max-w-[380px] text-[14px] text-muted">
-        This screen is designed and on the build list. We&apos;ll wire it up next.
-      </p>
-    </div>
-  )
-}
-
 function CoverPage() {
   return (
     <AppShell
@@ -87,7 +74,7 @@ function EventsPage() {
       title="Events worth attending"
       subtitle="Pulled by location — Claude flags which ones are worth your time."
     >
-      <ComingSoon what="Events" />
+      <EventsFeed />
     </AppShell>
   )
 }
