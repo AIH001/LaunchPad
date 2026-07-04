@@ -105,10 +105,23 @@ ADZUNA_APP_KEY
 TICKETMASTER_API_KEY
 ```
 
-Keyless sources (no secret needed): tech news uses Hacker News (Algolia), and
-events also pulls Luma's public discover feed (unofficial endpoint). Meetup is a
-documented stub in the `events` function — enabling it needs a paid Meetup Pro
-subscription to create an OAuth consumer.
+Optional job-source secrets (the `jobs` function degrades gracefully without
+them — each source reports `skipped` or `error` and the feed still renders from
+the others):
+
+```
+THEMUSE_API_KEY    # optional — The Muse works keyless at a lower rate limit
+JOOBLE_API_KEY     # required for Jooble; approval takes ~a day. Until set, the
+                   # Jooble source reports `skipped` (no error banner shown)
+```
+
+Keyless sources (no secret needed): tech news uses Hacker News (Algolia); events
+also pulls Luma's public discover feed (unofficial endpoint); the `jobs` function
+aggregates Adzuna with the keyless Remotive API (more keyless sources —
+Greenhouse + Lever public boards and the monthly Hacker News "Who is hiring?"
+thread — are being added incrementally). Meetup is a documented stub in the
+`events` function — enabling it needs a paid Meetup Pro subscription to create an
+OAuth consumer.
 # Handoff: Launchpad — design document
 
 ---

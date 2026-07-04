@@ -2,7 +2,12 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import { useProfile } from './useProfile'
 import { useAuth } from '../auth'
 import { supabase } from '../../lib/supabase'
-import type { ResumeParsed } from '../../types'
+import type { CareerStage, ResumeParsed } from '../../types'
+import {
+  CAREER_STAGE_LABELS,
+  CAREER_STAGE_ORDER,
+  resolveCareerStage,
+} from './career-stage'
 
 function initials(email: string) {
   if (!email) return '?'
@@ -70,6 +75,39 @@ function ChipEditor({
         placeholder={placeholder}
         className="rounded-full border border-dashed border-[#d2c8b6] bg-transparent px-3 py-[6px] font-mono text-[12.5px] focus:outline-none"
       />
+    </div>
+  )
+}
+
+// Optional career-stage picker. Clicking the active chip clears the selection,
+// which hands the decision back to resume inference (resolveCareerStage).
+function StageSelector({
+  value,
+  onChange,
+}: {
+  value: CareerStage | null
+  onChange: (next: CareerStage | null) => void
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-[7px]">
+      {CAREER_STAGE_ORDER.map((stage) => {
+        const active = value === stage
+        return (
+          <button
+            key={stage}
+            type="button"
+            aria-pressed={active}
+            onClick={() => onChange(active ? null : stage)}
+            className={`rounded-full border py-[6px] px-3 font-mono text-[12.5px] transition-colors ${
+              active
+                ? 'border-accent bg-ai text-warm-ink'
+                : 'border-line-soft2 bg-chip text-muted hover:border-faint'
+            }`}
+          >
+            {CAREER_STAGE_LABELS[stage]}
+          </button>
+        )
+      })}
     </div>
   )
 }
@@ -200,6 +238,8 @@ export function ProfileForm() {
   const [skills, setSkills] = useState<string[]>([])
   const [interests, setInterests] = useState<string[]>([])
   const [location, setLocation] = useState('')
+  const [targetRole, setTargetRole] = useState('')
+  const [careerStage, setCareerStage] = useState<CareerStage | null>(null)
   const [parsed, setParsed] = useState<ResumeParsed | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -212,6 +252,8 @@ export function ProfileForm() {
     setSkills(profile.skills ?? [])
     setInterests(profile.interests ?? [])
     setLocation(profile.location ?? '')
+    setTargetRole(profile.target_role ?? '')
+    setCareerStage(profile.career_stage ?? null)
     setParsed(profile.resume_parsed ?? null)
   }, [profile])
 
@@ -269,6 +311,8 @@ export function ProfileForm() {
       skills,
       interests,
       location: location.trim() || null,
+      target_role: targetRole.trim() || null,
+      career_stage: careerStage,
     })
     if (result.error) setError(result.error)
     else setToast('Profile saved — synced across your devices')
@@ -276,6 +320,10 @@ export function ProfileForm() {
   }
 
   if (loading) return <p className="text-[14px] text-muted">Loading your profile…</p>
+
+  // Reflect what the rest of the app will actually use — the explicit stage if
+  // set, otherwise the one inferred from the resume.
+  const resolved = resolveCareerStage({ career_stage: careerStage, resume_parsed: parsed })
 
   return (
     <div className="max-w-[740px]">
@@ -286,9 +334,11 @@ export function ProfileForm() {
         </div>
         <div className="min-w-0">
           <div className="font-display text-[22px] font-semibold">{name}</div>
-          <div className="text-[14px] text-muted">{email}</div>
+          <div className="text-[14px] text-muted">
+            {targetRole || CAREER_STAGE_LABELS[resolved.stage]}
+          </div>
           <div className="mt-[2px] font-mono text-[12px] text-faint">
-            {location || 'Location not set'} · Early-career developer
+            {location || 'Location not set'} · {email}
           </div>
         </div>
       </div>
@@ -308,7 +358,29 @@ export function ProfileForm() {
         onSubmit={handleSubmit}
         className="mt-4 flex flex-col gap-5 rounded-[18px] border border-line bg-surface p-6"
       >
+        <div>
+          <span className={LABEL}>Career stage · optional</span>
+          <StageSelector value={careerStage} onChange={setCareerStage} />
+          <p className="mt-[10px] text-[13px] text-faint">
+            {careerStage
+              ? 'Claude tailors matches and your game plan to this stage.'
+              : `Leave blank and we'll read it from your resume — currently reading you as ${CAREER_STAGE_LABELS[resolved.stage]}.`}
+          </p>
+        </div>
+
         <div className="flex flex-wrap gap-4">
+          <div className="min-w-[220px] flex-1">
+            <label htmlFor="target_role" className={LABEL}>
+              Target role
+            </label>
+            <input
+              id="target_role"
+              value={targetRole}
+              onChange={(e) => setTargetRole(e.target.value)}
+              placeholder="Frontend developer"
+              className={FIELD}
+            />
+          </div>
           <div className="min-w-[220px] flex-1">
             <label htmlFor="location" className={LABEL}>
               Location

@@ -1,4 +1,6 @@
 export { useJobs } from './useJobs'
+export { JobsProvider } from './JobsProvider'
+export { useJobsFeed } from './JobsContext'
 export { JobsFeed } from './JobsFeed'
 export { useSavedJobs } from './useSavedJobs'
 export { SavedJobsList, SavedJobsView } from './SavedJobsList'

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useJobs, type ScoredJob } from './useJobs'
+import { type ScoredJob } from './useJobs'
+import { useJobsFeed } from './JobsContext'
 import { useSavedJobs } from './useSavedJobs'
 import { SavedJobsView } from './SavedJobsList'
 
@@ -13,6 +14,31 @@ function band(score: number | null) {
 }
 
 const glyph = (company: string) => (company?.[0] ?? '?').toUpperCase()
+
+// Claude flagged this role as needing materially more experience than the user's
+// stage. It's an honest heads-up, not a filter — the role stays fully visible.
+function StretchBadge() {
+  return (
+    <span
+      title="Needs more experience than your stage — a reach, but Claude explains why it could be worth a shot."
+      className="inline-flex flex-none items-center rounded-full border border-ai-line bg-ai px-[7px] py-[1px] font-mono text-[10px] uppercase tracking-[.04em] text-warn-ink"
+    >
+      Stretch
+    </span>
+  )
+}
+
+// Human-readable names for the degraded-sources notice.
+const SOURCE_LABEL: Record<string, string> = {
+  adzuna: 'Adzuna',
+  remotive: 'Remotive',
+  themuse: 'The Muse',
+  jooble: 'Jooble',
+  hn: 'HN Who’s Hiring',
+  greenhouse: 'Greenhouse',
+  lever: 'Lever',
+  wwr: 'We Work Remotely',
+}
 
 function salaryText(min: number | null, max: number | null) {
   if (!min && !max) return 'Salary not listed'
@@ -45,8 +71,11 @@ function JobListCard({
         {glyph(job.company)}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[15px] font-semibold tracking-[-.01em]">
-          {job.title}
+        <div className="flex items-center gap-2">
+          <span className="truncate text-[15px] font-semibold tracking-[-.01em]">
+            {job.title}
+          </span>
+          {job.stretch && <StretchBadge />}
         </div>
         <div className="mt-[2px] truncate text-[13px] text-muted">
           {job.company} · {job.location || 'Remote / N/A'}
@@ -107,8 +136,11 @@ function JobDetailPanel({
           <span className="text-[18px] font-medium text-faint2">%</span>
         </div>
         <div className="flex-1">
-          <div className="text-[14px] font-semibold" style={{ color: b.labelColor }}>
-            {b.label}
+          <div className="flex items-center gap-2">
+            <span className="text-[14px] font-semibold" style={{ color: b.labelColor }}>
+              {b.label}
+            </span>
+            {job.stretch && <StretchBadge />}
           </div>
           <div className="mt-[6px] h-[7px] overflow-hidden rounded-[4px] bg-line-soft">
             <div
@@ -175,12 +207,12 @@ function JobDetailPanel({
 }
 
 export function JobsFeed() {
-  const { jobs, loading, scoring, error, search } = useJobs()
+  const { jobs, loading, scoring, error, degradedSources, search } = useJobsFeed()
   const { saved, loading: savedLoading, error: savedError, isSaved, save, unsave } =
     useSavedJobs()
   const navigate = useNavigate()
   const [tab, setTab] = useState<'feed' | 'saved'>('feed')
-  const [query, setQuery] = useState('developer')
+  const [query, setQuery] = useState('')
   const [location, setLocation] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
@@ -248,6 +280,7 @@ export function JobsFeed() {
           loading={loading}
           scoring={scoring}
           error={error}
+          degradedSources={degradedSources}
           query={query}
           location={location}
           selectedId={selectedId}
@@ -282,6 +315,7 @@ function FeedView({
   loading,
   scoring,
   error,
+  degradedSources,
   query,
   location,
   selectedId,
@@ -299,6 +333,7 @@ function FeedView({
   loading: boolean
   scoring: boolean
   error: string | null
+  degradedSources: string[]
   query: string
   location: string
   selectedId: string | null
@@ -338,9 +373,19 @@ function FeedView({
 
       {loading && <p className="text-[14px] text-muted">Fetching listings…</p>}
       {error && <p className="text-[14px] text-[#b4452f]">{error}</p>}
+
+      {/* Soft notice when a source degraded — feed is still usable. */}
+      {!loading && degradedSources.length > 0 && (
+        <p className="mb-[13px] rounded-[10px] border border-ai-line bg-ai px-[12px] py-2 font-mono text-[11px] text-warm-ink">
+          Couldn't reach{' '}
+          {degradedSources.map((s) => SOURCE_LABEL[s] ?? s).join(', ')} — showing
+          results from the other sources.
+        </p>
+      )}
       {!loading && !error && jobs.length === 0 && (
         <p className="text-[14px] text-muted">
-          Search to see roles scored against your profile.
+          No matches yet. Add a target role and skills to your profile — we'll
+          pull roles that fit — or search above.
         </p>
       )}
 

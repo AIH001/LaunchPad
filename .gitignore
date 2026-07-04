@@ -16,6 +16,9 @@ dist-ssr
 # Supabase local CLI cache
 supabase/.temp
 
+# Per-run benchmark output (baseline.json is committed; results/ are not)
+benchmarks/results
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

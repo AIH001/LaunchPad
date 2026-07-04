@@ -1,11 +1,27 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { Login, RequireAuth } from './features/auth'
-import { ProfileForm } from './features/profile'
-import { JobsFeed, SavedJobsList } from './features/jobs'
+import { ProfileForm, ProfileProvider } from './features/profile'
+import { JobsFeed, JobsProvider, SavedJobsList } from './features/jobs'
 import { CoverLetters } from './features/coverLetter'
 import { DailyDigest } from './features/news'
 import { EventsFeed } from './features/events'
+import { GamePlan, GamePlanProvider } from './features/coach'
 import { AppShell } from './components/AppShell'
+
+// Session-scoped shared state for the whole authed app. Mounted once, above the
+// routes, so profile / jobs feed / game plan are fetched a single time and
+// persist across tab navigation instead of reloading on every screen mount.
+function AppProviders() {
+  return (
+    <ProfileProvider>
+      <JobsProvider>
+        <GamePlanProvider>
+          <Outlet />
+        </GamePlanProvider>
+      </JobsProvider>
+    </ProfileProvider>
+  )
+}
 
 function JobsPage() {
   return (
@@ -79,18 +95,33 @@ function EventsPage() {
   )
 }
 
+function GamePlanPage() {
+  return (
+    <AppShell
+      kicker="YOUR PATH"
+      title="Game plan"
+      subtitle="The fastest route from where you are to your first offer — built by Claude."
+    >
+      <GamePlan />
+    </AppShell>
+  )
+}
+
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route element={<RequireAuth />}>
-        <Route path="/" element={<Navigate to="/jobs" replace />} />
-        <Route path="/jobs" element={<JobsPage />} />
-        <Route path="/saved" element={<SavedPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/cover" element={<CoverPage />} />
-        <Route path="/digest" element={<DigestPage />} />
-        <Route path="/events" element={<EventsPage />} />
+        <Route element={<AppProviders />}>
+          <Route path="/" element={<Navigate to="/jobs" replace />} />
+          <Route path="/jobs" element={<JobsPage />} />
+          <Route path="/saved" element={<SavedPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/cover" element={<CoverPage />} />
+          <Route path="/digest" element={<DigestPage />} />
+          <Route path="/events" element={<EventsPage />} />
+          <Route path="/coach" element={<GamePlanPage />} />
+        </Route>
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

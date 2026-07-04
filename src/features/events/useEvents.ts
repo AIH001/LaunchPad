@@ -40,46 +40,50 @@ export function useEvents() {
       setLoading(false)
       if (raw.length === 0) return
 
-      // 3) Ask Claude to rate + explain each event in one batch call. Send only
-      //    the lean fields it needs to judge fit.
-      const { data: scoreData, error: scoreErr } = await supabase.functions.invoke('claude', {
-        body: {
-          task: 'score_events',
-          events: raw.map((e) => ({
-            id: e.id,
-            title: e.title,
-            description: e.description,
-            venue: e.location.display,
-            category: e.category,
-            isVirtual: e.isVirtual,
-          })),
-          profile: {
-            skills: profile.skills ?? [],
-            interests: profile.interests ?? [],
-            location: profile.location ?? null,
-          },
-        },
-      })
-
-      if (scoreErr) {
-        // Non-fatal: show events without verdicts rather than hiding the feed.
-        setEvents((prev) => prev.map((e) => ({ ...e, scoring: false })))
-        return
+      const profilePayload = {
+        skills: profile.skills ?? [],
+        interests: profile.interests ?? [],
+        location: profile.location ?? null,
       }
 
-      const verdicts = (scoreData?.verdicts ?? []) as Array<{
-        event_id: string
-        verdict: 'worth_it' | 'optional'
-        take: string
-        tags: string[]
-      }>
-
-      setEvents((prev) =>
-        prev.map((e) => {
-          const v = verdicts.find((v) => v.event_id === e.id)
-          return v
-            ? { ...e, verdict: v.verdict, take: v.take, tags: v.tags, scoring: false }
-            : { ...e, scoring: false }
+      // 3) Fan out: rate each event in its own call, in parallel. Update each
+      //    card the moment its verdict lands — no waiting for the slowest.
+      await Promise.all(
+        raw.map(async (e) => {
+          try {
+            const { data, error: scoreErr } = await supabase.functions.invoke('claude', {
+              body: {
+                task: 'score_events',
+                events: [
+                  {
+                    id: e.id,
+                    title: e.title,
+                    description: e.description,
+                    venue: e.location.display,
+                    category: e.category,
+                    isVirtual: e.isVirtual,
+                  },
+                ],
+                profile: profilePayload,
+              },
+            })
+            if (scoreErr) throw new Error(scoreErr.message)
+            const v = (data?.verdicts ?? [])[0]
+            setEvents((prev) =>
+              prev.map((ev) =>
+                ev.id === e.id
+                  ? v
+                    ? { ...ev, verdict: v.verdict, take: v.take, tags: v.tags, scoring: false }
+                    : { ...ev, scoring: false }
+                  : ev
+              )
+            )
+          } catch {
+            // Clear this card's spinner even if its scoring call failed.
+            setEvents((prev) =>
+              prev.map((ev) => (ev.id === e.id ? { ...ev, scoring: false } : ev))
+            )
+          }
         })
       )
     } catch (err) {

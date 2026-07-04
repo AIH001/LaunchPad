@@ -1,0 +1,18 @@
+{
+  "_note": "PLACEHOLDER — not yet populated from a real run. Once the jobs/claude functions are deployed and a BENCH_EMAIL/BENCH_PASSWORD test account exists, run `npm run bench`, then copy benchmarks/results/<date>.json over this file to set the baseline. Overwrite deliberately, only after a change you expect to move the numbers.",
+  "date": null,
+  "target": null,
+  "query": "frontend developer",
+  "jobsFeed": {
+    "runs": 3,
+    "totalMsP50": null,
+    "perSourceMs": {},
+    "sources": {},
+    "jobCount": null
+  },
+  "claudeScoring": {
+    "samples": 5,
+    "p50Ms": null,
+    "p95Ms": null
+  }
+}

@@ -1,10 +1,14 @@
 import { type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../features/auth'
+import { useProfile } from '../features/profile/useProfile'
+import { CAREER_STAGE_LABELS, resolveCareerStage } from '../features/profile/career-stage'
 
-// The 5 nav items from the design doc, in order.
+// Nav items in order. Game Plan sits right after Job Matches — it's the
+// early-career coaching companion to the feed (it reasons over match gaps).
 const NAV = [
   { label: 'Job Matches', to: '/jobs' },
+  { label: 'Game Plan', to: '/coach' },
   { label: 'Profile', to: '/profile' },
   { label: 'Cover Letters', to: '/cover' },
   { label: 'Daily Digest', to: '/digest' },
@@ -33,9 +37,11 @@ export function AppShell({
   children: ReactNode
 }) {
   const { user, signOut } = useAuth()
+  const { profile } = useProfile()
   const { pathname } = useLocation()
   const email = user?.email ?? ''
   const name = email ? email.split('@')[0] : 'You'
+  const stageLabel = CAREER_STAGE_LABELS[resolveCareerStage(profile).stage]
   // App runtime (browser) — new Date() is fine here.
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'short',
@@ -101,9 +107,7 @@ export function AppShell({
             </div>
             <div className="min-w-0">
               <div className="truncate text-[13px] font-semibold">{name}</div>
-              <div className="truncate text-[11px] text-faint">
-                Early-career developer
-              </div>
+              <div className="truncate text-[11px] text-faint">{stageLabel}</div>
             </div>
           </Link>
         </div>
