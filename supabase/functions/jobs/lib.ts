@@ -15,6 +15,10 @@ export type JobSource =
   | 'greenhouse'
   | 'lever'
   | 'wwr'
+  | 'ashby'
+  | 'smartrecruiters'
+  | 'workable'
+  | 'simplify'
 
 export interface NormalizedJob {
   id: string // ALWAYS `${source}:${externalId}` — globally unique + stable
@@ -102,6 +106,56 @@ export function titleMatchesQueries(title: string, queries: string[]): boolean {
     if (terms.length === 0 && (words.has('engineer') || words.has('developer'))) return true
   }
   return false
+}
+
+// Ingest-time relevance heuristics (used by the background worker, not the live
+// feed). When ingesting a whole company board there's no user query to filter
+// against, so these keep the jobs table focused on tech / early-career roles
+// instead of storing every sales/HR/ops listing.
+
+const TECH_ROLE_RE =
+  /\b(engineer|engineering|developer|programmer|software|frontend|front[- ]?end|backend|back[- ]?end|full[- ]?stack|data|machine learning|ml|ai|devops|sre|mobile|ios|android|web|qa|security|infrastructure|platform|cloud|firmware|hardware|systems)\b/i
+
+const EARLY_CAREER_RE =
+  /\b(intern|internship|junior|jr|entry[- ]?level|new[- ]?grad|graduate|associate|apprentice|trainee|early[- ]?career|campus|co-?op)\b/i
+
+// Seniority markers that disqualify a role from the early-career flag. Matched
+// against the TITLE only (a description often mentions "you'll work with senior
+// engineers" without the role itself being senior).
+const SENIOR_ROLE_RE =
+  /\b(senior|sr|staff|principal|lead|director|vp|head of|manager|architect|expert)\b/i
+
+// Is this title a tech role at all? Used to drop non-eng roles from big ATS
+// boards at ingest.
+export function isTechRole(title: string): boolean {
+  return TECH_ROLE_RE.test(title)
+}
+
+// Best-effort early-career signal, stored on the jobs row. True when the posting
+// explicitly reads early-career, or when it's an unqualified tech IC role with no
+// seniority marker (plausibly open to early-career candidates). The Claude
+// per-user match score remains the real gate — this is just a coarse filter/sort
+// signal. (Honest heuristic; a Claude classifier is the deferred upgrade.)
+export function isEarlyCareer(title: string, description = ''): boolean {
+  if (EARLY_CAREER_RE.test(`${title} ${description}`)) return true
+  if (SENIOR_ROLE_RE.test(title)) return false
+  return isTechRole(title)
+}
+
+// Turn the (<=2) derived search queries into a Postgres websearch_to_tsquery
+// string: unique significant word tokens OR'd together, so the DB-backed feed is
+// broad and the Claude per-user score does the fine ranking. Returns '' when
+// there are no usable terms — the caller then skips the text filter and returns
+// recent early-career jobs instead of nothing.
+export function toWebsearchQuery(queries: string[]): string {
+  const stop = new Set(['the', 'and', 'or', 'a', 'an', 'of', 'in', 'for', 'to', 'with'])
+  const terms = new Set<string>()
+  for (const q of queries) {
+    for (const t of q.toLowerCase().match(/[a-z0-9+#.]+/g) ?? []) {
+      if (t.length > 1 && !stop.has(t)) terms.add(t)
+    }
+  }
+  return [...terms].join(' or ')
 }
 
 // Dedupe across sources on a coarse key: normalized title + company. The same
@@ -339,6 +393,181 @@ export function mapLever(j: LeverJob, company: string): NormalizedJob {
     salaryMax: null,
     created: j.createdAt ? new Date(j.createdAt).toISOString() : '',
   }
+}
+
+// ---------------------------------------------------------------------------
+// Ashby (keyless public job-board JSON, per company)
+// ---------------------------------------------------------------------------
+// Shape confirmed live against api.ashbyhq.com/posting-api/job-board/ashby —
+// location is a plain string (no nested address object needed), and both
+// jobUrl and applyUrl are present; jobUrl is the listing page.
+
+export interface AshbyJob {
+  id: string
+  title: string
+  location?: string
+  publishedAt?: string
+  jobUrl: string
+  descriptionHtml?: string
+}
+
+export function mapAshby(j: AshbyJob, company: string): NormalizedJob {
+  return {
+    id: `ashby:${j.id}`,
+    source: 'ashby',
+    title: j.title,
+    company,
+    location: j.location ?? '',
+    description: stripHtml(j.descriptionHtml ?? '').slice(0, DESCRIPTION_LIMIT),
+    url: j.jobUrl,
+    salaryMin: null, // Ashby's compensation field is a free-text summary when present — dropped, same tradeoff as Remotive.
+    salaryMax: null,
+    created: j.publishedAt ?? '',
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SmartRecruiters (keyless public postings JSON, per company)
+// ---------------------------------------------------------------------------
+// Shape confirmed live against api.smartrecruiters.com/v1/companies/Visa/postings.
+// The list endpoint has no description field at all (unlike Greenhouse's
+// ?content=true) — a real one needs a second per-posting fetch, which we're
+// deliberately not doing to avoid N+1 fan-out on top of the per-company one.
+// Description is thin (title + company) until proven worth the extra fetch.
+// `ref` is an api.smartrecruiters.com URL (JSON, not a candidate-facing page);
+// the public apply page is jobs.smartrecruiters.com/{companyIdentifier}/{id}
+// (confirmed live to resolve).
+
+export interface SmartRecruitersJob {
+  id: string
+  name: string
+  location?: { city?: string; region?: string; country?: string; fullLocation?: string }
+  releasedDate?: string
+}
+
+export function mapSmartRecruiters(j: SmartRecruitersJob, companyIdentifier: string): NormalizedJob {
+  return {
+    id: `smartrecruiters:${j.id}`,
+    source: 'smartrecruiters',
+    title: j.name,
+    company: companyIdentifier,
+    location: j.location?.fullLocation ?? '',
+    description: `${j.name} at ${companyIdentifier}`,
+    url: `https://jobs.smartrecruiters.com/${companyIdentifier}/${j.id}`,
+    salaryMin: null,
+    salaryMax: null,
+    created: j.releasedDate ?? '',
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Workable (keyless public widget JSON, per company)
+// ---------------------------------------------------------------------------
+// NOTE: unlike Ashby/SmartRecruiters above, this shape is NOT confirmed
+// against a live example with open postings (every real account tried had
+// zero current jobs) — it's built from Workable's own widget/API docs
+// (shortcode, title, url, location, state fields). VERIFY against a live
+// account with open roles before relying on this in production. `location` is
+// handled defensively since its exact sub-shape wasn't observable live.
+
+export interface WorkableJob {
+  title: string
+  shortcode: string
+  url?: string
+  location?: string | { location_str?: string; city?: string; country?: string }
+  published_on?: string
+}
+
+function workableLocationText(loc: WorkableJob['location']): string {
+  if (!loc) return ''
+  if (typeof loc === 'string') return loc
+  return loc.location_str ?? [loc.city, loc.country].filter(Boolean).join(', ')
+}
+
+export function mapWorkable(j: WorkableJob, account: string): NormalizedJob {
+  return {
+    id: `workable:${j.shortcode}`,
+    source: 'workable',
+    title: j.title,
+    company: account,
+    location: workableLocationText(j.location),
+    description: `${j.title} at ${account}`,
+    url: j.url ?? `https://apply.workable.com/${account}/j/${j.shortcode}/`,
+    salaryMin: null,
+    salaryMax: null,
+    created: j.published_on ?? '',
+  }
+}
+
+// ---------------------------------------------------------------------------
+// SimplifyJobs Summer2026-Internships (community-maintained GitHub README —
+// real HTML scraping, same risk tier as WWR)
+// ---------------------------------------------------------------------------
+// The README's role tables are raw HTML <table> markup embedded in the
+// markdown (confirmed live), not markdown pipe tables — so this parses <tr>/
+// <td> blocks with regexes, mirroring parseWwrHtml's approach rather than a
+// full HTML parser. Quirks handled, all confirmed against the live file:
+//  - Consecutive roles at the same company reuse a bare "↳" in the company
+//    cell instead of repeating the name — must carry the last company forward
+//    or these rows would silently attribute to "Unknown".
+//  - The location cell is sometimes a <details><summary>N locations</summary>
+//    list rather than plain text — we surface just the summary text.
+//  - The application cell has two links (the real apply link, then a
+//    simplify.jobs tracking link) — we take the one whose <img alt="Apply">,
+//    falling back to the first href if that marker ever changes.
+//  - The repo pulls closed listings out into a separate README-Inactive.md
+//    file rather than marking them 🔒 inline (confirmed: no inline 🔒 in the
+//    live table body), but we still defensively skip any row that does
+//    contain 🔒, in case that changes.
+//  - The "Age" column (e.g. "3d") has no absolute date — left as created: ''
+//    rather than guessing a year, same honest tradeoff as Remotive/Jooble
+//    dropping free-text salary.
+
+const SIMPLIFY_ROW_RE = /<tr>([\s\S]*?)<\/tr>/g
+const SIMPLIFY_CELL_RE = /<td>([\s\S]*?)<\/td>/g
+
+export function parseSimplifyReadme(markdown: string): NormalizedJob[] {
+  const out: NormalizedJob[] = []
+  let lastCompany = ''
+
+  for (const rowMatch of markdown.matchAll(SIMPLIFY_ROW_RE)) {
+    const cells = [...rowMatch[1].matchAll(SIMPLIFY_CELL_RE)].map((m) => m[1])
+    if (cells.length !== 5) continue // not a data row (e.g. the <thead> row uses <th>, not <td>)
+    const [companyCell, roleCell, locationCell, applicationCell] = cells
+
+    if (companyCell.includes('🔒') || applicationCell.includes('🔒')) continue
+
+    const companyText = stripHtml(companyCell).trim()
+    const company = companyText === '↳' || companyText === '' ? lastCompany : companyText
+    if (!company) continue
+    lastCompany = company
+
+    const title = stripHtml(roleCell).trim()
+    if (!title) continue
+
+    const detailsSummary = locationCell.match(/<summary>([\s\S]*?)<\/summary>/)
+    const location = stripHtml(detailsSummary ? detailsSummary[1] : locationCell).trim()
+
+    const applyLink =
+      applicationCell.match(/<a href="(https?:\/\/[^"]+)"[^>]*>\s*<img[^>]*alt="Apply"/) ??
+      applicationCell.match(/href="(https?:\/\/[^"]+)"/)
+    if (!applyLink) continue // no working apply link — nothing worth surfacing
+
+    out.push({
+      id: `simplify:${applyLink[1]}`,
+      source: 'simplify',
+      title,
+      company,
+      location,
+      description: `${title} at ${company}`,
+      url: applyLink[1],
+      salaryMin: null,
+      salaryMax: null,
+      created: '',
+    })
+  }
+
+  return out
 }
 
 // ---------------------------------------------------------------------------

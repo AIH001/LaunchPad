@@ -46,6 +46,10 @@ export type JobSource =
   | 'greenhouse'
   | 'lever'
   | 'wwr'
+  | 'ashby'
+  | 'smartrecruiters'
+  | 'workable'
+  | 'simplify'
 
 // The single normalized job shape every source maps into. Source-agnostic and
 // free of any AI fields — Claude's match score is layered on separately

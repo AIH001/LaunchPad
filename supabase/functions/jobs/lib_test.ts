@@ -12,11 +12,18 @@ import {
   mapJooble,
   mapGreenhouse,
   mapLever,
+  mapAshby,
+  mapSmartRecruiters,
+  mapWorkable,
   mapHnExtracted,
   parseWwrHtml,
+  parseSimplifyReadme,
   pickWhoIsHiringThread,
   prefilterHnComments,
   titleMatchesQueries,
+  isTechRole,
+  isEarlyCareer,
+  toWebsearchQuery,
   stripHtml,
   stripEscapedHtml,
   withTimeout,
@@ -202,6 +209,119 @@ Deno.test('mapLever maps title/location and converts epoch ms to ISO', () => {
   assertEquals(mapped.created, new Date(1751328000000).toISOString())
 })
 
+Deno.test('mapAshby normalizes the full shape with prefixed id', () => {
+  const mapped = mapAshby(
+    {
+      id: '7458d4e9-da2e-47bd-98cb-adfda43d42b2',
+      title: 'Software Engineer',
+      location: 'Remote - United States',
+      publishedAt: '2026-06-01T00:00:00.000+00:00',
+      jobUrl: 'https://jobs.ashbyhq.com/acme/7458d4e9',
+      descriptionHtml: '<p>Build &amp; ship</p>',
+    },
+    'acme'
+  )
+  assertEquals(mapped.id, 'ashby:7458d4e9-da2e-47bd-98cb-adfda43d42b2')
+  assertEquals(mapped.source, 'ashby')
+  assertEquals(mapped.company, 'acme')
+  assertEquals(mapped.location, 'Remote - United States')
+  assertEquals(mapped.description, 'Build & ship')
+  assertEquals(mapped.url, 'https://jobs.ashbyhq.com/acme/7458d4e9')
+})
+
+Deno.test('mapAshby falls back on missing optional fields', () => {
+  const mapped = mapAshby(
+    { id: '1', title: 'Dev', jobUrl: 'https://jobs.ashbyhq.com/acme/1' },
+    'acme'
+  )
+  assertEquals(mapped.location, '')
+  assertEquals(mapped.description, '')
+  assertEquals(mapped.created, '')
+})
+
+Deno.test('mapSmartRecruiters joins location and builds the public apply URL', () => {
+  const mapped = mapSmartRecruiters(
+    {
+      id: '744000133907678',
+      name: 'Sr. Manager',
+      location: { city: 'Austin', region: 'TX', country: 'us', fullLocation: 'Austin, TX, United States' },
+      releasedDate: '2026-06-24T10:00:11.853Z',
+    },
+    'Visa'
+  )
+  assertEquals(mapped.id, 'smartrecruiters:744000133907678')
+  assertEquals(mapped.company, 'Visa')
+  assertEquals(mapped.location, 'Austin, TX, United States')
+  // No description at the list-endpoint level — thin by design (flagged tradeoff).
+  assertEquals(mapped.description, 'Sr. Manager at Visa')
+  assertEquals(mapped.url, 'https://jobs.smartrecruiters.com/Visa/744000133907678')
+})
+
+Deno.test('mapWorkable builds a URL from shortcode when url is absent', () => {
+  const mapped = mapWorkable(
+    { title: 'Backend Engineer', shortcode: 'BACKEND01', location: 'Remote' },
+    'acme'
+  )
+  assertEquals(mapped.id, 'workable:BACKEND01')
+  assertEquals(mapped.url, 'https://apply.workable.com/acme/j/BACKEND01/')
+  assertEquals(mapped.location, 'Remote')
+})
+
+Deno.test('mapWorkable prefers an explicit url and handles object locations', () => {
+  const mapped = mapWorkable(
+    {
+      title: 'Support Engineer',
+      shortcode: 'SUP01',
+      url: 'https://apply.workable.com/acme/j/SUP01/full/',
+      location: { city: 'Berlin', country: 'Germany' },
+    },
+    'acme'
+  )
+  assertEquals(mapped.url, 'https://apply.workable.com/acme/j/SUP01/full/')
+  assertEquals(mapped.location, 'Berlin, Germany')
+})
+
+Deno.test('parseSimplifyReadme extracts roles from real captured markup', async () => {
+  // Fixture is a trimmed capture of the live SimplifyJobs README table, plus a
+  // synthetic closed (🔒) row and a no-alt-marker apply link appended for
+  // branch coverage — the repo itself prunes closed rows into a separate
+  // README-Inactive.md rather than leaving them inline, so a real inline 🔒
+  // example wasn't observable live. This is the canary for the scraper.
+  const md = await Deno.readTextFile(
+    new URL('./__fixtures__/simplify-readme.md', import.meta.url)
+  )
+  const jobs = parseSimplifyReadme(md)
+
+  // 7 rows in the fixture; the synthetic 🔒 row is dropped, leaving 6.
+  assertEquals(jobs.length, 6)
+  assertEquals(jobs.every((j) => j.source === 'simplify'), true)
+
+  assertEquals(jobs[0].company, 'Eulerity')
+  assertEquals(jobs[0].location, 'NYC')
+
+  // <details><summary>N locations</summary> cell surfaces just the summary text.
+  assertEquals(jobs[1].company, 'Travelers')
+  assertEquals(jobs[1].location, '4 locations')
+
+  // "↳" rows inherit the last real company name instead of "Unknown".
+  assertEquals(jobs[2].company, 'Palo Alto Networks')
+  assertEquals(jobs[3].company, 'Palo Alto Networks')
+  assertEquals(jobs[3].title, 'Software Engineer Intern 🎓')
+  assertEquals(jobs[4].company, 'Palo Alto Networks')
+
+  // Apply link without an alt="Apply" marker still resolves via the href fallback.
+  assertEquals(jobs[5].company, 'Acme Robotics')
+  assertEquals(jobs[5].url, 'https://jobs.acmerobotics.example/firmware-intern?ref=Simplify')
+  assertEquals(jobs[5].id, 'simplify:https://jobs.acmerobotics.example/firmware-intern?ref=Simplify')
+
+  // The 🔒 closed row must not appear at all.
+  assertEquals(jobs.some((j) => j.company === 'Closed Co'), false)
+})
+
+Deno.test('parseSimplifyReadme returns nothing for a doc with no role tables', () => {
+  assertEquals(parseSimplifyReadme('# Just a heading\n\nNo tables here.').length, 0)
+})
+
 Deno.test('titleMatchesQueries matches on shared non-generic tokens', () => {
   assertEquals(titleMatchesQueries('Frontend Engineer', ['frontend developer']), true)
   assertEquals(titleMatchesQueries('React Developer', ['react developer']), true)
@@ -213,6 +333,34 @@ Deno.test('titleMatchesQueries keeps generic dev roles for a generic query', () 
   // Query reduces to no specific tokens → match any engineer/developer title.
   assertEquals(titleMatchesQueries('Software Engineer', ['software developer']), true)
   assertEquals(titleMatchesQueries('Marketing Manager', ['software developer']), false)
+})
+
+Deno.test('isTechRole keeps eng/data roles and drops non-tech', () => {
+  assertEquals(isTechRole('Backend Engineer'), true)
+  assertEquals(isTechRole('Data Analyst'), true)
+  assertEquals(isTechRole('iOS Developer'), true)
+  assertEquals(isTechRole('Account Executive'), false)
+  assertEquals(isTechRole('Recruiter'), false)
+})
+
+Deno.test('isEarlyCareer flags early signals, unqualified tech ICs; rejects senior', () => {
+  assertEquals(isEarlyCareer('Software Engineer Intern'), true) // explicit early signal
+  assertEquals(isEarlyCareer('New Grad Software Engineer'), true)
+  assertEquals(isEarlyCareer('Software Engineer'), true) // unqualified tech IC → plausible
+  assertEquals(isEarlyCareer('Senior Software Engineer'), false) // seniority marker in title
+  assertEquals(isEarlyCareer('Engineering Manager'), false) // manager = senior marker
+  assertEquals(isEarlyCareer('Account Executive'), false) // not tech, no early signal
+})
+
+Deno.test('toWebsearchQuery ORs unique significant tokens, drops stopwords', () => {
+  assertEquals(
+    toWebsearchQuery(['junior software engineer', 'react developer']),
+    'junior or software or engineer or react or developer'
+  )
+  // Cross-query duplicate 'software' collapses to one term.
+  assertEquals(toWebsearchQuery(['software engineer', 'software developer']), 'software or engineer or developer')
+  assertEquals(toWebsearchQuery(['the and of']), '') // all stopwords
+  assertEquals(toWebsearchQuery([]), '')
 })
 
 Deno.test('stripEscapedHtml handles entity-encoded markup', () => {

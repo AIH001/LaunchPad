@@ -17,9 +17,10 @@ Users sign up, set up a profile once (resume + skills + interests + location), t
 - **Auth:** Supabase Auth (email + Google OAuth)
 - **Database:** Supabase Postgres
 - **API proxying:** Supabase Edge Functions (Deno) — all third-party API calls go through here
+- **Background jobs:** `ingest-jobs` Edge Function on a GitHub Actions cron syncs job sources into the DB (see Jobs architecture)
 - **Styling: see the design document below
 - **AI:** Anthropic Claude API, model `claude-sonnet-4-6`
-- **External data:** Adzuna API (jobs), Hacker News (tech news), Ticketmaster Discovery + Luma (events)
+- **External data:** jobs ingested from Adzuna + Remotive + Greenhouse/Lever/Ashby/SmartRecruiters/Workable boards + SimplifyJobs; Hacker News (tech news); Ticketmaster Discovery + Luma (events)
 - **Deploy:** Vercel (frontend), Supabase (backend)
 
 ## Project structure
@@ -42,13 +43,48 @@ Keep each feature self-contained under `features/`. Shared logic and the Supabas
 
 ## Data model
 
+Per-user tables (RLS scoped to `auth.uid()` — a user reads/writes only their own rows):
+
 ```
 profiles        id (fk auth.users), resume_text, skills[], interests[], location, timestamps
 saved_jobs      id, user_id, job_payload (jsonb), match_score, match_reasoning, created_at
 cover_letters   id, user_id, job_id (fk saved_jobs), body, timestamps
+job_scores      (user_id, job_id) pk, score, why_fit, gaps, stretch — per-user Claude match cache
 ```
 
-Enable Row Level Security on all tables — users can only read/write their own rows.
+Global (shared) tables — the database-first jobs pipeline (see below). RLS here is
+**authenticated read-only** (`using (true)` + explicit grants); the ONLY writer is
+the ingest worker via the service-role key:
+
+```
+job_sources     id, kind ('ats_board'|'search_query'|'scrape'), source, token, query, display_name,
+                is_active, last_synced_at, last_status, last_error, timestamps  — the WHERE-to-ingest catalog
+jobs            id, source, external_job_id, external_id (=`${source}:${externalId}`), title, company,
+                location, description, url, salary_min/max, posted_at, is_early_career,
+                content_hash/search_tsv (generated), first_seen_at/last_seen_at/closed_at/is_active
+ingestion_runs  id, started_at, finished_at, per_source (jsonb)  — sync observability
+```
+
+Enable Row Level Security on every table. Per-user tables scope to `auth.uid()`; the
+global jobs tables are read-only to authenticated users and written only by the
+service-role ingest worker (never disable RLS to "make writes work" — that's what the
+service role is for).
+
+### Jobs architecture (database-first)
+
+The `jobs` feed does NOT call source APIs live per search. A scheduled worker
+(`ingest-jobs` Edge Function, triggered by a GitHub Actions cron) walks the
+`job_sources` catalog, fetches each source (per-company ATS boards, global search
+APIs run against standing early-career queries, and scrapes), normalizes via the
+mappers in `jobs/lib.ts`, and upserts into the `jobs` table — marking listings that
+disappeared as `is_active=false`. The user-facing `jobs` function then just runs a
+Postgres full-text query over that table and returns the same
+`{ jobs, sources, timings }` shape as before, so the frontend (`useJobs.ts`) and the
+per-user Claude scoring (`job_scores`) are unchanged. `sources` now reflects each
+source's last **sync** health. Honest tradeoffs: the feed can lag by up to one cron
+interval; "full ingestion" of the global search APIs is only as broad as the standing
+`search_query` rows in `job_sources`; HN "Who is hiring?" ingestion is currently
+deferred (it needs an auth-gated Claude call the service-role worker can't make yet).
 
 ## Commands
 
@@ -103,25 +139,36 @@ ANTHROPIC_API_KEY
 ADZUNA_APP_ID
 ADZUNA_APP_KEY
 TICKETMASTER_API_KEY
+INGEST_SECRET             # shared secret gating the ingest-jobs worker; also set
+                         # as the GitHub Actions repo secret of the same name
 ```
 
-Optional job-source secrets (the `jobs` function degrades gracefully without
-them — each source reports `skipped` or `error` and the feed still renders from
-the others):
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected
+by the platform. The service-role key is used ONLY by the `ingest-jobs` worker to
+write the global jobs tables — never ship it to the browser. The GitHub Actions
+cron also needs two repo secrets: `INGEST_FUNCTION_URL` and `INGEST_SECRET`.
+
+Optional job-source secrets (the `ingest-jobs` worker degrades gracefully without
+them — each source row reports `skipped` or `error` in `job_sources.last_status`
+and the jobs table still fills from the others):
 
 ```
 THEMUSE_API_KEY    # optional — The Muse works keyless at a lower rate limit
 JOOBLE_API_KEY     # required for Jooble; approval takes ~a day. Until set, the
-                   # Jooble source reports `skipped` (no error banner shown)
+                   # Jooble source rows report `skipped` (no error banner shown)
 ```
 
 Keyless sources (no secret needed): tech news uses Hacker News (Algolia); events
-also pulls Luma's public discover feed (unofficial endpoint); the `jobs` function
-aggregates Adzuna with the keyless Remotive API (more keyless sources —
-Greenhouse + Lever public boards and the monthly Hacker News "Who is hiring?"
-thread — are being added incrementally). Meetup is a documented stub in the
-`events` function — enabling it needs a paid Meetup Pro subscription to create an
-OAuth consumer.
+also pulls Luma's public discover feed (unofficial endpoint); the `ingest-jobs`
+worker syncs the keyless Remotive API, Greenhouse/Lever/Ashby/SmartRecruiters/
+Workable public per-company boards, and a scrape of the SimplifyJobs
+Summer2026-Internships README into the `jobs` table. Which companies/queries get
+ingested is data in the `job_sources` catalog (seeded in `supabase/seed.sql`), not
+hardcoded — extend coverage by adding rows. The Ashby/SmartRecruiters/Workable
+catalog ships with no rows yet: add real, curl-verified company slugs before they
+surface any jobs. HN "Who is hiring?" ingestion is deferred (needs an auth-gated
+Claude call). Meetup is a documented stub in the `events` function — enabling it
+needs a paid Meetup Pro subscription to create an OAuth consumer.
 # Handoff: Launchpad — design document
 
 ---

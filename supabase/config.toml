@@ -385,6 +385,13 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# The ingest worker is not user-authenticated — it's called server-to-server by
+# the GitHub Actions cron and gates itself on a shared x-ingest-secret header. So
+# the platform's JWT verification must be off for it (every other function keeps
+# the default verify_jwt = true).
+[functions.ingest-jobs]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

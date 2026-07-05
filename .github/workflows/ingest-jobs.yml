@@ -1,0 +1,45 @@
+name: Ingest jobs
+
+# Background job-ingestion worker. Runs on a schedule (and can be triggered by
+# hand) to POST the ingest-jobs edge function, which syncs every source in the
+# job_sources catalog into the public.jobs table. This keeps live source-API
+# calls OFF the user's search path — the app's jobs feed reads the table this
+# populates.
+#
+# Required repository secrets:
+#   INGEST_FUNCTION_URL  e.g. https://<project-ref>.supabase.co/functions/v1/ingest-jobs
+#   INGEST_SECRET        the same shared secret set as an edge-function secret
+
+on:
+  schedule:
+    # Every 4 hours. Cron is UTC. Ingestion is idempotent (upsert), so overlap or
+    # a missed tick is harmless.
+    - cron: '0 */4 * * *'
+  workflow_dispatch: {} # manual trigger — used for the first populate + debugging
+
+concurrency:
+  # Never run two ingests at once; skip a scheduled run if one is already going.
+  group: ingest-jobs
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger ingest-jobs function
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/ingest_body.json -w '%{http_code}' \
+            -X POST "${INGEST_FUNCTION_URL}" \
+            -H "x-ingest-secret: ${INGEST_SECRET}" \
+            -H "content-type: application/json" \
+            --max-time 540)
+          echo "HTTP ${code}"
+          cat /tmp/ingest_body.json
+          echo
+          # Fail the run on a non-2xx so a broken ingest is visible in Actions.
+          [ "${code}" -ge 200 ] && [ "${code}" -lt 300 ]
+        env:
+          INGEST_FUNCTION_URL: ${{ secrets.INGEST_FUNCTION_URL }}
+          INGEST_SECRET: ${{ secrets.INGEST_SECRET }}

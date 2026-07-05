@@ -28,7 +28,7 @@ function StretchBadge() {
   )
 }
 
-// Human-readable names for the degraded-sources notice.
+// Human-readable names for the degraded-sources notice and the per-job source badge.
 const SOURCE_LABEL: Record<string, string> = {
   adzuna: 'Adzuna',
   remotive: 'Remotive',
@@ -38,6 +38,10 @@ const SOURCE_LABEL: Record<string, string> = {
   greenhouse: 'Greenhouse',
   lever: 'Lever',
   wwr: 'We Work Remotely',
+  ashby: 'Ashby',
+  smartrecruiters: 'SmartRecruiters',
+  workable: 'Workable',
+  simplify: 'SimplifyJobs',
 }
 
 function salaryText(min: number | null, max: number | null) {
@@ -81,7 +85,7 @@ function JobListCard({
           {job.company} · {job.location || 'Remote / N/A'}
         </div>
         <div className="mt-[3px] font-mono text-[12px] text-faint">
-          {salaryText(job.salaryMin, job.salaryMax)}
+          {salaryText(job.salaryMin, job.salaryMax)} · via {SOURCE_LABEL[job.source] ?? job.source}
         </div>
       </div>
       <div className="flex flex-none flex-col items-end gap-[6px]">
@@ -125,8 +129,13 @@ function JobDetailPanel({
       <div className="text-[14px] text-muted">
         {job.company} · {job.location || 'Remote / N/A'}
       </div>
-      <div className="mt-[10px] inline-block rounded-[8px] border border-line-soft bg-chip px-[10px] py-[5px] font-mono text-[12px]">
-        {salaryText(job.salaryMin, job.salaryMax)}
+      <div className="mt-[10px] flex flex-wrap items-center gap-2">
+        <span className="inline-block rounded-[8px] border border-line-soft bg-chip px-[10px] py-[5px] font-mono text-[12px]">
+          {salaryText(job.salaryMin, job.salaryMax)}
+        </span>
+        <span className="inline-block rounded-[8px] border border-line-soft bg-chip px-[10px] py-[5px] font-mono text-[12px] text-faint">
+          via {SOURCE_LABEL[job.source] ?? job.source}
+        </span>
       </div>
 
       {/* Score row */}
