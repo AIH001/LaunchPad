@@ -3,20 +3,26 @@ import { Login, RequireAuth } from './features/auth'
 import { ProfileForm, ProfileProvider } from './features/profile'
 import { JobsFeed, JobsProvider, SavedJobsList } from './features/jobs'
 import { CoverLetters } from './features/coverLetter'
-import { DailyDigest } from './features/news'
-import { EventsFeed } from './features/events'
+import { DailyDigest, DigestProvider } from './features/news'
+import { EventsFeed, EventsProvider } from './features/events'
 import { GamePlan, GamePlanProvider } from './features/coach'
 import { AppShell } from './components/AppShell'
 
 // Session-scoped shared state for the whole authed app. Mounted once, above the
-// routes, so profile / jobs feed / game plan are fetched a single time and
-// persist across tab navigation instead of reloading on every screen mount.
+// routes, so profile / jobs feed / game plan / events / digest are fetched a
+// single time and persist across tab navigation instead of reloading on every
+// screen mount. The AI views (game plan, events, digest) additionally hydrate
+// from the ai_cache table so they survive a browser refresh / re-login too.
 function AppProviders() {
   return (
     <ProfileProvider>
       <JobsProvider>
         <GamePlanProvider>
-          <Outlet />
+          <EventsProvider>
+            <DigestProvider>
+              <Outlet />
+            </DigestProvider>
+          </EventsProvider>
         </GamePlanProvider>
       </JobsProvider>
     </ProfileProvider>

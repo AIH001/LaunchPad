@@ -191,25 +191,43 @@ function JobDetailPanel({
       )}
 
       {/* Actions */}
-      <div className="mt-[18px] flex gap-[10px]">
-        <button
-          type="button"
-          onClick={onDraft}
-          className="flex-1 rounded-[11px] bg-accent px-3 py-3 text-[14px] font-semibold text-white shadow-[0_2px_8px_rgba(190,80,40,.22)] transition-colors hover:brightness-95"
-        >
-          Draft cover letter
-        </button>
-        <button
-          type="button"
-          onClick={onToggleSave}
-          className={`rounded-[11px] border px-4 py-3 text-[14px] font-medium transition-colors ${
-            saved
-              ? 'border-ink bg-ink text-app'
-              : 'border-line-soft2 bg-surface text-[#3a3329] hover:bg-field'
-          }`}
-        >
-          {saved ? 'Saved ✓' : 'Save'}
-        </button>
+      <div className="mt-[18px] flex flex-col gap-[10px]">
+        {/* Apply is the real conversion step — primary accent when the source
+            gave us a link. Opens the original listing in a new tab. */}
+        {job.url && (
+          <a
+            href={job.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-[6px] rounded-[11px] bg-accent px-3 py-3 text-[14px] font-semibold text-white shadow-[0_2px_8px_rgba(190,80,40,.22)] transition-colors hover:brightness-95"
+          >
+            Apply <span aria-hidden="true">↗</span>
+          </a>
+        )}
+        <div className="flex gap-[10px]">
+          <button
+            type="button"
+            onClick={onDraft}
+            className={`flex-1 rounded-[11px] px-3 py-3 text-[14px] font-semibold transition-colors ${
+              job.url
+                ? 'border border-line-soft2 bg-surface text-[#3a3329] hover:bg-field'
+                : 'bg-accent text-white shadow-[0_2px_8px_rgba(190,80,40,.22)] hover:brightness-95'
+            }`}
+          >
+            Draft cover letter
+          </button>
+          <button
+            type="button"
+            onClick={onToggleSave}
+            className={`rounded-[11px] border px-4 py-3 text-[14px] font-medium transition-colors ${
+              saved
+                ? 'border-ink bg-ink text-app'
+                : 'border-line-soft2 bg-surface text-[#3a3329] hover:bg-field'
+            }`}
+          >
+            {saved ? 'Saved ✓' : 'Save'}
+          </button>
+        </div>
       </div>
     </aside>
   )

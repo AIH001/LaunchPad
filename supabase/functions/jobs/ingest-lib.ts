@@ -4,7 +4,19 @@
 // ready to upsert into the public.jobs table.
 import { type NormalizedJob, isTechRole, isEarlyCareer } from './lib.ts'
 
-type SourceKind = 'ats_board' | 'search_query' | 'scrape'
+export type SourceKind = 'ats_board' | 'search_query' | 'scrape'
+
+// Max jobs stored per job_sources row per run, by source kind. One flat cap was
+// wrong: `search_query` rows hit large general job APIs where a modest cap keeps a
+// single query from flooding the table, but `scrape`/`ats_board` sources are
+// curated lists (SimplifyJobs' README, WWR, a company's own board) where the whole
+// point is coverage — capping them at 50 silently dropped the bulk of them (the
+// Simplify repo alone lists ~330 internships).
+export const PER_ROW_CAP: Record<SourceKind, number> = {
+  search_query: 50,
+  ats_board: 100,
+  scrape: 500,
+}
 
 // The insert/upsert shape for public.jobs. Only real columns — the generated
 // ones (external_id, normalized_title, content_hash, search_tsv) are computed by
@@ -73,4 +85,31 @@ export function buildJobRows(
     })
   }
   return out
+}
+
+// Run `fn` over `items` with at most `limit` in flight at once, returning results
+// in input order with allSettled semantics (never throws — a failed item is a
+// `rejected` result). The ingest worker uses this instead of firing every source
+// at once: once the catalog grows to hundreds of ATS boards, an unbounded
+// `Promise.allSettled(rows.map(...))` would open hundreds of sockets and trip
+// source rate limits inside one function invocation.
+export async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<PromiseSettledResult<R>[]> {
+  const results = new Array<PromiseSettledResult<R>>(items.length)
+  let next = 0
+  const worker = async (): Promise<void> => {
+    for (let i = next++; i < items.length; i = next++) {
+      try {
+        results[i] = { status: 'fulfilled', value: await fn(items[i], i) }
+      } catch (reason) {
+        results[i] = { status: 'rejected', reason }
+      }
+    }
+  }
+  const workers = Math.max(1, Math.min(limit, items.length))
+  await Promise.all(Array.from({ length: workers }, () => worker()))
+  return results
 }

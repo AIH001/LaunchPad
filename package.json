@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:functions": "deno test --allow-read supabase/functions",
-    "bench": "tsx scripts/benchmark-jobs.ts"
+    "bench": "tsx scripts/benchmark-jobs.ts",
+    "mine:ats": "tsx scripts/mine-ats-boards.ts",
+    "theirstack:ats": "tsx scripts/theirstack-ats-boards.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",

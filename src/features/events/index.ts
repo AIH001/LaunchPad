@@ -1,2 +1,3 @@
 export { EventsFeed } from './EventsFeed'
-export { useEvents } from './useEvents'
+export { EventsProvider } from './EventsProvider'
+export { useEventsFeed } from './EventsContext'

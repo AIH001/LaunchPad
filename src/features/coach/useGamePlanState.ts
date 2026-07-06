@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { readAiCache, writeAiCache } from '../../lib/aiCache'
 import { useProfile } from '../profile'
 import { resolveCareerStage } from '../profile/career-stage'
 
@@ -15,17 +16,45 @@ export type GamePlanData = {
 // job feed. Enough to reveal recurring themes without bloating the prompt.
 const MATCH_GAP_LIMIT = 30
 
-// The game-plan state machine. Deliberately does NOT auto-run: it lives inside
-// an always-mounted provider, so auto-running would fire an expensive Sonnet call
-// at login. The GamePlan screen triggers generate() the first time it's viewed,
-// and because this state persists in the provider, returning to the tab shows the
-// existing plan instead of regenerating.
+// The game-plan state machine. Deliberately does NOT auto-run Claude: it lives
+// inside an always-mounted provider, so auto-running would fire an expensive
+// Sonnet call at login. On mount it only does a cheap DB read to hydrate any
+// previously-saved plan (survives browser refresh + new logins). The GamePlan
+// screen triggers generate() the first time it's viewed *and no cached plan
+// exists*; once generated, the plan is persisted and only re-run on the explicit
+// Regenerate button.
 export function useGamePlanState() {
   const { profile } = useProfile()
   const [plan, setPlan] = useState<GamePlanData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasGenerated, setHasGenerated] = useState(false)
+  // When the persisted plan was last built (ISO); drives the "updated <ago>"
+  // caption. null until a plan is hydrated or generated.
+  const [generatedAt, setGeneratedAt] = useState<string | null>(null)
+  // True during the initial cache read. The screen waits on this before deciding
+  // whether to auto-generate, so a cached plan is never clobbered by a fresh run.
+  const [hydrating, setHydrating] = useState(true)
+
+  // Hydrate the saved plan once the profile (and thus user id) is known. Cheap
+  // read, not a Claude call — safe to run in the always-mounted provider.
+  useEffect(() => {
+    if (!profile) return
+    let cancelled = false
+    void (async () => {
+      const entry = await readAiCache<GamePlanData>(profile.id, 'game_plan')
+      if (cancelled) return
+      if (entry) {
+        setPlan(entry.payload)
+        setGeneratedAt(entry.generatedAt)
+        setHasGenerated(true) // suppress the screen's first-view auto-generate
+      }
+      setHydrating(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [profile])
 
   const generate = useCallback(async () => {
     if (!profile) return
@@ -62,8 +91,11 @@ export function useGamePlanState() {
         },
       })
       if (fnErr) throw new Error(fnErr.message)
-      setPlan((data?.plan ?? null) as GamePlanData | null)
+      const nextPlan = (data?.plan ?? null) as GamePlanData | null
+      setPlan(nextPlan)
       setHasGenerated(true)
+      // Persist so it survives refresh/re-login; only Regenerate rebuilds it.
+      if (nextPlan) setGeneratedAt(await writeAiCache(profile.id, 'game_plan', nextPlan))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       // Mark generated so the screen shows the error instead of retry-looping.
@@ -73,5 +105,5 @@ export function useGamePlanState() {
     }
   }, [profile])
 
-  return { plan, loading, error, hasGenerated, regenerate: generate }
+  return { plan, loading, error, hasGenerated, hydrating, generatedAt, regenerate: generate }
 }

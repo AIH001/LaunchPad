@@ -1,7 +1,11 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useProfile } from '../profile'
-import { useEvents } from './useEvents'
+import { timeAgo } from '../../lib/timeAgo'
+import { useEventsFeed } from './EventsContext'
 import type { EventSource, ScoredEvent } from '../../types'
+
+type EventTab = 'all' | 'worth_it'
 
 const SOURCE_LABEL: Record<EventSource, string> = {
   ticketmaster: 'Ticketmaster',
@@ -123,6 +127,38 @@ function EventCard({ event }: { event: ScoredEvent }) {
   )
 }
 
+function TabButton({
+  active,
+  onClick,
+  label,
+  count,
+}: {
+  active: boolean
+  onClick: () => void
+  label: string
+  count?: number
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        'inline-flex items-center gap-[6px] rounded-[10px] px-[14px] py-[7px] font-mono text-[12px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ' +
+        (active
+          ? 'border border-line bg-surface font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,.03)]'
+          : 'border border-transparent text-muted hover:bg-chip')
+      }
+    >
+      {label}
+      {typeof count === 'number' && (
+        <span className="rounded-[6px] bg-chip px-[6px] py-[1px] text-[11px] text-faint">
+          {count}
+        </span>
+      )}
+    </button>
+  )
+}
+
 function SkeletonCard() {
   return (
     <div className="flex animate-pulse items-start gap-[18px] rounded-[16px] border border-line bg-surface p-[20px_22px]">
@@ -138,7 +174,22 @@ function SkeletonCard() {
 
 export function EventsFeed() {
   const { profile } = useProfile()
-  const { events, loading, error, degradedSources, refresh } = useEvents()
+  const { events, loading, error, degradedSources, generatedAt, hydrating, hasLoaded, refresh } =
+    useEventsFeed()
+  const [tab, setTab] = useState<EventTab>('all')
+
+  // Trigger the first fetch when this screen is first opened and nothing is
+  // cached — keeps the expensive fetch+score lazy (the provider only hydrates).
+  // Reruns are prevented by hasLoaded; returning to the tab reuses the feed.
+  useEffect(() => {
+    if (profile?.location && !hydrating && !hasLoaded && !loading) {
+      void refresh()
+    }
+  }, [profile?.location, hydrating, hasLoaded, loading, refresh])
+
+  const worthItCount = events.filter((e) => e.verdict === 'worth_it').length
+  const visibleEvents =
+    tab === 'worth_it' ? events.filter((e) => e.verdict === 'worth_it') : events
 
   if (!profile?.location) {
     return (
@@ -175,9 +226,17 @@ export function EventsFeed() {
 
   return (
     <div className="max-w-[820px]">
-      {/* Caption + refresh */}
-      <div className="mb-[13px] flex items-center justify-between">
-        <p className="font-mono text-[12px] text-faint">Near {profile.location}</p>
+      {/* Tabs + refresh */}
+      <div className="mb-[13px] flex items-center justify-between gap-3">
+        <div className="flex items-center gap-[6px]">
+          <TabButton active={tab === 'all'} onClick={() => setTab('all')} label="All" />
+          <TabButton
+            active={tab === 'worth_it'}
+            onClick={() => setTab('worth_it')}
+            label="Worth it"
+            count={loading ? undefined : worthItCount}
+          />
+        </div>
         <button
           type="button"
           onClick={refresh}
@@ -187,6 +246,16 @@ export function EventsFeed() {
           Refresh
         </button>
       </div>
+
+      {/* Caption */}
+      <p className="mb-[13px] font-mono text-[12px] text-faint">
+        {tab === 'worth_it'
+          ? `Worth attending · near ${profile.location}`
+          : `Near ${profile.location}`}
+        {generatedAt && !loading && (
+          <span className="text-faint2"> · updated {timeAgo(generatedAt)}</span>
+        )}
+      </p>
 
       {/* Soft notice when a source degraded — feed is still usable. */}
       {!loading && degradedSources.length > 0 && (
@@ -206,16 +275,19 @@ export function EventsFeed() {
             <SkeletonCard />
             <SkeletonCard />
           </>
-        ) : events.length === 0 ? (
+        ) : visibleEvents.length === 0 ? (
           <div className="rounded-[18px] border border-dashed border-[#d8cdbb] p-12 text-center">
-            <h3 className="font-display text-[19px] font-semibold">No events found</h3>
+            <h3 className="font-display text-[19px] font-semibold">
+              {tab === 'worth_it' ? 'Nothing flagged worth it' : 'No events found'}
+            </h3>
             <p className="mx-auto mt-2 max-w-[380px] text-[14px] text-muted">
-              No upcoming tech events near {profile.location}. Try refreshing or updating
-              your location.
+              {tab === 'worth_it'
+                ? `Claude hasn't flagged any upcoming events near ${profile.location} as worth attending yet. Check the All tab for the full list.`
+                : `No upcoming tech events near ${profile.location}. Try refreshing or updating your location.`}
             </p>
           </div>
         ) : (
-          events.map((event) => <EventCard key={event.id} event={event} />)
+          visibleEvents.map((event) => <EventCard key={event.id} event={event} />)
         )}
       </div>
     </div>

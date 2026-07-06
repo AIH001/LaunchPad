@@ -1,18 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useProfile } from '../profile'
-import { useDigest, type DigestItem, type Story } from './useDigest'
-
-// "3h ago" / "2d ago" from an ISO timestamp. Falls back to '' if unparseable.
-function timeAgo(iso: string): string {
-  if (!iso) return ''
-  const then = new Date(iso).getTime()
-  if (Number.isNaN(then)) return ''
-  const mins = Math.max(0, Math.round((Date.now() - then) / 60000))
-  if (mins < 60) return `${mins}m ago`
-  const hrs = Math.round(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  return `${Math.round(hrs / 24)}d ago`
-}
+import { timeAgo } from '../../lib/timeAgo'
+import { useDigestFeed } from './DigestContext'
+import type { DigestItem, Story } from './useDigest'
 
 // General tab: raw news, no Claude. Lighter than the curated card — just the
 // headline plus HN signal (points / comments). No relevance/summary/tags.
@@ -130,8 +120,11 @@ export function DailyDigest() {
     curating,
     curateError,
     hasCurated,
+    generatedAt,
+    hydrating,
+    hasLoaded,
     curate,
-  } = useDigest()
+  } = useDigestFeed()
 
   const [tab, setTab] = useState<Tab>('general')
 
@@ -140,6 +133,15 @@ export function DailyDigest() {
     month: 'short',
     day: 'numeric',
   })
+
+  // Trigger the first news fetch when this screen is first opened and nothing is
+  // cached — keeps the fetch lazy (the provider only hydrates). Reruns are
+  // prevented by hasLoaded; returning to the tab reuses the loaded digest.
+  useEffect(() => {
+    if (!hydrating && !hasLoaded && !storiesLoading) {
+      void reloadNews()
+    }
+  }, [hydrating, hasLoaded, storiesLoading, reloadNews])
 
   // Kick off the Claude curation as soon as the news feed lands — in the
   // background, while the user reads the instant General tab. By the time they
@@ -151,10 +153,11 @@ export function DailyDigest() {
     }
   }, [hasCurated, curating, stories, curate])
 
+  const freshness = generatedAt ? ` · updated ${timeAgo(generatedAt)}` : ''
   const caption =
-    tab === 'general'
+    (tab === 'general'
       ? `Top tech stories · ${today}`
-      : `Filtered to your stack · ${today}`
+      : `Filtered to your stack · ${today}`) + freshness
 
   return (
     <div className="mx-auto flex max-w-[820px] flex-col gap-[13px]">

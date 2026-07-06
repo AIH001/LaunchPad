@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useProfile } from '../profile'
+import { timeAgo } from '../../lib/timeAgo'
 import { useGamePlan } from './GamePlanContext'
 
 // The accent diamond that marks the AI layer across the app ("Claude's take").
@@ -25,15 +26,18 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 export function GamePlan() {
   const { profile, loading: profileLoading } = useProfile()
-  const { plan, loading, error, hasGenerated, regenerate } = useGamePlan()
+  const { plan, loading, error, hasGenerated, hydrating, generatedAt, regenerate } =
+    useGamePlan()
 
-  // Generate on first view once the profile is ready. Guarded by hasGenerated so
-  // it runs a single time — returning to this tab reuses the persisted plan.
+  // Generate on first view once the profile is ready AND the cache read has
+  // settled. Guarded by hasGenerated (set true either by a prior generate or by
+  // a hydrated cache) so it runs at most once — a saved plan is reused instead of
+  // rebuilt on every login/refresh.
   useEffect(() => {
-    if (!profileLoading && profile && !hasGenerated && !loading) {
+    if (!profileLoading && profile && !hydrating && !hasGenerated && !loading) {
       void regenerate()
     }
-  }, [profileLoading, profile, hasGenerated, loading, regenerate])
+  }, [profileLoading, profile, hydrating, hasGenerated, loading, regenerate])
 
   // No profile row yet — nudge setup rather than spin forever on a plan we can't
   // build.
@@ -56,6 +60,9 @@ export function GamePlan() {
       <div className="flex items-center justify-between gap-3">
         <div className="font-mono text-[12px] text-faint">
           Synthesized from your profile and the gaps across your job matches.
+          {generatedAt && !loading && (
+            <span className="text-faint2"> · updated {timeAgo(generatedAt)}</span>
+          )}
         </div>
         <button
           type="button"

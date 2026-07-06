@@ -50,7 +50,18 @@ profiles        id (fk auth.users), resume_text, skills[], interests[], location
 saved_jobs      id, user_id, job_payload (jsonb), match_score, match_reasoning, created_at
 cover_letters   id, user_id, job_id (fk saved_jobs), body, timestamps
 job_scores      (user_id, job_id) pk, score, why_fit, gaps, stretch — per-user Claude match cache
+ai_cache        (user_id, kind) pk, payload (jsonb), generated_at — per-user cache of the
+                expensive AI views (kind 'game_plan'|'events'|'digest'), so they persist across
+                browser refresh/re-login and only rebuild on an explicit Regenerate/Refresh
 ```
+
+The AI views (Game Plan, Events, Daily Digest) are cached two ways: their state lives
+in session providers (mounted once in `App.tsx`) so it survives tab navigation, and it
+hydrates from `ai_cache` on first mount so it survives a full page reload. The providers
+only *hydrate* (a cheap DB read) at login; the actual fetch/Claude work is triggered
+lazily by each screen on first view, so a user who never opens a tab pays nothing.
+Manual-refresh model: cached data can go stale (e.g. after a profile edit) until the
+user clicks Regenerate/Refresh — surfaced honestly via an "updated <time ago>" caption.
 
 Global (shared) tables — the database-first jobs pipeline (see below). RLS here is
 **authenticated read-only** (`using (true)` + explicit grants); the ONLY writer is
@@ -156,6 +167,12 @@ and the jobs table still fills from the others):
 THEMUSE_API_KEY    # optional — The Muse works keyless at a lower rate limit
 JOOBLE_API_KEY     # required for Jooble; approval takes ~a day. Until set, the
                    # Jooble source rows report `skipped` (no error banner shown)
+INGEST_MAX_SOURCES # optional — max job_sources rows the ingest worker processes per
+                   # run (default 250). The catalog is synced oldest-first, so this
+                   # caps time/CPU per run and round-robins a large catalog across
+                   # runs. Raise it (or run the cron more often) for fresher data;
+                   # when the catalog exceeds it, stale-listing close is skipped
+                   # that run to avoid wrongly retiring un-visited boards' jobs.
 ```
 
 Keyless sources (no secret needed): tech news uses Hacker News (Algolia); events

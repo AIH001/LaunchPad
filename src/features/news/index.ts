@@ -1,3 +1,4 @@
 export { DailyDigest } from './DailyDigest'
-export { useDigest } from './useDigest'
+export { DigestProvider } from './DigestProvider'
+export { useDigestFeed } from './DigestContext'
 export type { DigestItem, Story } from './useDigest'
