@@ -12,9 +12,14 @@ name: Ingest jobs
 
 on:
   schedule:
-    # Every 4 hours. Cron is UTC. Ingestion is idempotent (upsert), so overlap or
-    # a missed tick is harmless.
-    - cron: '0 */4 * * *'
+    # Hourly. Cron is UTC. Ingestion is idempotent (upsert), so overlap or a
+    # missed tick is harmless. Hourly (rather than every 4h) pairs with the
+    # INGEST_MAX_SOURCES edge-function secret set low (~30): each invocation
+    # syncs a small slice of the job_sources catalog — keeping the function
+    # inside its per-invocation memory/CPU budget (the 546 WORKER_RESOURCE_LIMIT
+    # failures) — and the frequent cadence round-robins the full catalog every
+    # few hours. Freshness = (catalog size / INGEST_MAX_SOURCES) hours.
+    - cron: '0 * * * *'
   workflow_dispatch: {} # manual trigger — used for the first populate + debugging
 
 concurrency:
