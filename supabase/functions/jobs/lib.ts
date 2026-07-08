@@ -57,12 +57,13 @@ export const DESCRIPTION_LIMIT = 2000
 
 // Race a source against a deadline so one hung API can't stall the whole feed.
 export function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-    ),
-  ])
+  let timer: number | undefined
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+  })
+  // Clear the timer once the race settles — otherwise the fast path leaves it
+  // pending for the full `ms` (Deno's test leak sanitizer rightly flags this).
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
 // Decode the handful of HTML entities job boards actually emit.
