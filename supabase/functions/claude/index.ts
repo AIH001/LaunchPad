@@ -138,6 +138,21 @@ const RESUME_SCHEMA = {
   ],
 }
 
+// Cost/abuse guards. The JWT gate below stops anonymous callers, but a
+// logged-in user could still loop this function or send oversized batches and
+// run up the Anthropic bill — these bound both. Caps sit above what the
+// frontend actually sends (jobs: 15/scoring pass, stories: 30/digest,
+// events: 1/fan-out call) so honest clients never hit them.
+const RATE_LIMIT_PER_HOUR = 100
+const MAX_JOBS_PER_CALL = 20
+const MAX_STORIES_PER_CALL = 40
+const MAX_EVENTS_PER_CALL = 20
+const MAX_COMMENTS_PER_CALL = 60
+
+function tooMany(what: string, max: number): Response {
+  return json({ error: `Too many ${what} in one call (max ${max}).` }, 400)
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -158,7 +173,23 @@ Deno.serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) return json({ error: 'Not authenticated.' }, 401)
 
-    // 2) DISPATCH by task.
+    // 2) RATE LIMIT — one tiny DB upsert per call (consume_claude_call is a
+    // SECURITY DEFINER function; users can't reset their own counter). Honest
+    // tradeoff: if the RPC itself errors (e.g. migration not applied yet) we
+    // fail OPEN so a database hiccup doesn't take every AI feature down — the
+    // JWT gate above still holds, and the limit is about bounding the bill.
+    const { data: withinLimit, error: rateErr } = await supabase.rpc(
+      'consume_claude_call',
+      { p_limit: RATE_LIMIT_PER_HOUR }
+    )
+    if (!rateErr && withinLimit === false) {
+      return json(
+        { error: 'Rate limit reached — please try again in a little while.' },
+        429
+      )
+    }
+
+    // 3) DISPATCH by task.
     const body = await req.json().catch(() => ({}))
     const anthropic = new Anthropic({ apiKey: Deno.env.get('ANTHROPIC_API_KEY')! })
 
@@ -226,6 +257,7 @@ async function scoreJobs(anthropic: Anthropic, body: Record<string, unknown>) {
   if (!profile || !Array.isArray(jobs) || jobs.length === 0) {
     return json({ error: 'Provide a profile and a non-empty jobs array.' }, 400)
   }
+  if (jobs.length > MAX_JOBS_PER_CALL) return tooMany('jobs', MAX_JOBS_PER_CALL)
 
   // Trim descriptions so a long listing can't blow up our token budget.
   const compactJobs = jobs.map((j) => ({
@@ -417,6 +449,9 @@ async function summarizeDigest(anthropic: Anthropic, body: Record<string, unknow
   if (!Array.isArray(stories) || stories.length === 0) {
     return json({ error: 'Provide a non-empty stories array.' }, 400)
   }
+  if (stories.length > MAX_STORIES_PER_CALL) {
+    return tooMany('stories', MAX_STORIES_PER_CALL)
+  }
 
   const skills = profile?.skills ?? []
   const hasSkills = skills.length > 0
@@ -514,6 +549,9 @@ async function scoreEvents(anthropic: Anthropic, body: Record<string, unknown>) 
   if (!Array.isArray(events) || events.length === 0) {
     return json({ error: 'Provide a non-empty events array.' }, 400)
   }
+  if (events.length > MAX_EVENTS_PER_CALL) {
+    return tooMany('events', MAX_EVENTS_PER_CALL)
+  }
 
   const system =
     'You are a career advisor for early-career developers. Given a list of tech ' +
@@ -579,6 +617,9 @@ async function extractJobsFromText(anthropic: Anthropic, body: Record<string, un
   const comments = body.comments as Array<{ id: number | string; text: string }> | undefined
   if (!Array.isArray(comments) || comments.length === 0) {
     return json({ error: 'Provide a non-empty comments array.' }, 400)
+  }
+  if (comments.length > MAX_COMMENTS_PER_CALL) {
+    return tooMany('comments', MAX_COMMENTS_PER_CALL)
   }
 
   const system =

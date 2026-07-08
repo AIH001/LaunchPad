@@ -53,6 +53,9 @@ job_scores      (user_id, job_id) pk, score, why_fit, gaps, stretch — per-user
 ai_cache        (user_id, kind) pk, payload (jsonb), generated_at — per-user cache of the
                 expensive AI views (kind 'game_plan'|'events'|'digest'), so they persist across
                 browser refresh/re-login and only rebuild on an explicit Regenerate/Refresh
+claude_usage    (user_id, window_start) pk, count — hourly rate-limit counter for the claude
+                function. RLS on with NO policies (a user who could write it could reset their
+                own quota); incremented only via the consume_claude_call() security-definer RPC
 ```
 
 The AI views (Game Plan, Events, Daily Digest) are cached two ways: their state lives
@@ -152,6 +155,8 @@ ADZUNA_APP_KEY
 TICKETMASTER_API_KEY
 INGEST_SECRET             # shared secret gating the ingest-jobs worker; also set
                          # as the GitHub Actions repo secret of the same name
+ALLOWED_ORIGIN            # deployed frontend URL for CORS (e.g. https://<app>.vercel.app);
+                         # unset = '*' fallback for local dev — set it in production
 ```
 
 `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are injected
