@@ -16,6 +16,27 @@ export type GamePlanData = {
 // job feed. Enough to reveal recurring themes without bloating the prompt.
 const MATCH_GAP_LIMIT = 30
 
+// Both plan sources are outside our control at the type level — the Claude
+// response is a cast, and the ai_cache payload is whatever was last persisted.
+// The screen dereferences plan.priority_gaps/.next_actions in render, so a
+// malformed payload would throw there (and a bad *cached* one would throw on
+// every reload). Discard anything that doesn't hold the shape instead.
+function sanitizeGamePlan(raw: unknown): GamePlanData | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const p = raw as Partial<GamePlanData>
+  if (typeof p.standing !== 'string') return null
+  if (!Array.isArray(p.priority_gaps) || !Array.isArray(p.next_actions)) return null
+  return {
+    standing: p.standing,
+    priority_gaps: p.priority_gaps.filter(
+      (g): g is GamePlanData['priority_gaps'][number] =>
+        typeof g === 'object' && g !== null && typeof (g as { skill?: unknown }).skill === 'string'
+    ),
+    next_actions: p.next_actions.filter((a): a is string => typeof a === 'string'),
+    encouragement: typeof p.encouragement === 'string' ? p.encouragement : '',
+  }
+}
+
 // The game-plan state machine. Deliberately does NOT auto-run Claude: it lives
 // inside an always-mounted provider, so auto-running would fire an expensive
 // Sonnet call at login. On mount it only does a cheap DB read to hydrate any
@@ -44,8 +65,9 @@ export function useGamePlanState() {
     void (async () => {
       const entry = await readAiCache<GamePlanData>(profile.id, 'game_plan')
       if (cancelled) return
-      if (entry) {
-        setPlan(entry.payload)
+      const cachedPlan = entry ? sanitizeGamePlan(entry.payload) : null
+      if (entry && cachedPlan) {
+        setPlan(cachedPlan)
         setGeneratedAt(entry.generatedAt)
         setHasGenerated(true) // suppress the screen's first-view auto-generate
       }
@@ -91,7 +113,7 @@ export function useGamePlanState() {
         },
       })
       if (fnErr) throw new Error(fnErr.message)
-      const nextPlan = (data?.plan ?? null) as GamePlanData | null
+      const nextPlan = sanitizeGamePlan(data?.plan)
       setPlan(nextPlan)
       setHasGenerated(true)
       // Persist so it survives refresh/re-login; only Regenerate rebuilds it.

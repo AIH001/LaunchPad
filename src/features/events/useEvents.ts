@@ -4,6 +4,18 @@ import { readAiCache, writeAiCache } from '../../lib/aiCache'
 import { useProfile } from '../profile'
 import type { Event, ScoredEvent } from '../../types'
 
+// The cached feed is whatever was last persisted — guarantee only what the
+// render dereferences (event.tags.map, the scoring spinner flag) so a
+// malformed cache entry is dropped instead of white-screening every reload.
+function sanitizeScoredEvents(raw: unknown): ScoredEvent[] | null {
+  if (!Array.isArray(raw)) return null
+  return raw.map((e) => ({
+    ...(e as ScoredEvent),
+    tags: Array.isArray((e as ScoredEvent)?.tags) ? (e as ScoredEvent).tags : [],
+    scoring: false,
+  }))
+}
+
 export function useEvents() {
   const { profile, loading: profileLoading } = useProfile()
   const [events, setEvents] = useState<ScoredEvent[]>([])
@@ -124,8 +136,9 @@ export function useEvents() {
     initialized.current = true
     void (async () => {
       const entry = await readAiCache<ScoredEvent[]>(profile.id, 'events')
-      if (entry) {
-        setEvents(entry.payload)
+      const cached = entry ? sanitizeScoredEvents(entry.payload) : null
+      if (entry && cached) {
+        setEvents(cached)
         setGeneratedAt(entry.generatedAt)
         setHasLoaded(true)
       }

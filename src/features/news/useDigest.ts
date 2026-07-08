@@ -31,6 +31,20 @@ type DigestCache = { stories: Story[]; items: DigestItem[] }
 // How many front-page stories we pull before Claude filters them down.
 const FETCH_LIMIT = 30
 
+// The cached payload is whatever was last persisted — trust it only as far as
+// the render needs: both feeds must be arrays and every item needs a tags
+// array (the screen calls item.tags.map). A malformed cache is discarded, not
+// rendered, so it can't white-screen the app on every reload.
+function sanitizeDigestCache(raw: unknown): DigestCache | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const c = raw as Partial<DigestCache>
+  if (!Array.isArray(c.stories) || !Array.isArray(c.items)) return null
+  return {
+    stories: c.stories,
+    items: c.items.map((i) => ({ ...i, tags: Array.isArray(i?.tags) ? i.tags : [] })),
+  }
+}
+
 export function useDigest() {
   const { profile, loading: profileLoading } = useProfile()
 
@@ -110,7 +124,12 @@ export function useDigest() {
         .map((c) => {
           const story = byId.get(c.id)
           if (!story) return null
-          return { ...story, summary: c.summary, relevance: c.relevance, tags: c.tags }
+          return {
+            ...story,
+            summary: c.summary,
+            relevance: c.relevance,
+            tags: Array.isArray(c.tags) ? c.tags : [],
+          }
         })
         .filter((x): x is DigestItem => x !== null)
 
@@ -140,9 +159,10 @@ export function useDigest() {
     void (async () => {
       if (profile) {
         const entry = await readAiCache<DigestCache>(profile.id, 'digest')
-        if (entry) {
-          setStories(entry.payload.stories)
-          setItems(entry.payload.items)
+        const cached = entry ? sanitizeDigestCache(entry.payload) : null
+        if (entry && cached) {
+          setStories(cached.stories)
+          setItems(cached.items)
           setHasCurated(true)
           setGeneratedAt(entry.generatedAt)
           setHasLoaded(true)
