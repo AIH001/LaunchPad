@@ -29,7 +29,7 @@ export function SavedJobsView({
   if (error) return <p className="text-[14px] text-[#b4452f]">{error}</p>
   if (saved.length === 0) {
     return (
-      <div className="rounded-[18px] border border-dashed border-[#d8cdbb] p-12 text-center">
+      <div className="rounded-[18px] border border-dashed border-[#d8cdbb] p-7 md:p-12 text-center">
         <h3 className="font-display text-[19px] font-semibold text-ink">
           No saved jobs yet
         </h3>

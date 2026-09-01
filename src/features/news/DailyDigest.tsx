@@ -197,7 +197,7 @@ export function DailyDigest() {
             <p className="text-[14px] text-[#b4452f]">{storiesError}</p>
           )}
           {!storiesLoading && !storiesError && stories.length === 0 && (
-            <div className="rounded-[16px] border border-dashed border-[#d8cdbb] p-12 text-center">
+            <div className="rounded-[16px] border border-dashed border-[#d8cdbb] p-7 md:p-12 text-center">
               <h3 className="font-display text-[18px] font-semibold text-ink">
                 No stories right now
               </h3>
@@ -230,7 +230,7 @@ export function DailyDigest() {
             <p className="text-[14px] text-[#b4452f]">{curateError}</p>
           )}
           {!curating && !curateError && hasCurated && items.length === 0 && (
-            <div className="rounded-[16px] border border-dashed border-[#d8cdbb] p-12 text-center">
+            <div className="rounded-[16px] border border-dashed border-[#d8cdbb] p-7 md:p-12 text-center">
               <h3 className="font-display text-[18px] font-semibold text-ink">
                 Nothing stood out today
               </h3>

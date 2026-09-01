@@ -43,7 +43,7 @@ export function GamePlan() {
   // build.
   if (!profileLoading && !profile) {
     return (
-      <div className="max-w-[820px] rounded-[16px] border border-dashed border-[#d8cdbb] p-12 text-center">
+      <div className="max-w-[820px] rounded-[16px] border border-dashed border-[#d8cdbb] p-7 md:p-12 text-center">
         <h3 className="font-display text-[18px] font-semibold text-ink">
           Set up your profile first
         </h3>
@@ -147,7 +147,7 @@ export function GamePlan() {
 
       {/* First-load empty state (before the auto-generate resolves). */}
       {!loading && !error && !plan && hasGenerated && (
-        <div className="rounded-[16px] border border-dashed border-[#d8cdbb] p-12 text-center">
+        <div className="rounded-[16px] border border-dashed border-[#d8cdbb] p-7 md:p-12 text-center">
           <h3 className="font-display text-[18px] font-semibold text-ink">
             No game plan yet
           </h3>

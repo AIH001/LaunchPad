@@ -6,13 +6,15 @@ import { CAREER_STAGE_LABELS, resolveCareerStage } from '../features/profile/car
 
 // Nav items in order. Game Plan sits right after Job Matches — it's the
 // early-career coaching companion to the feed (it reasons over match gaps).
+// `short` is the label used in the mobile bottom tab bar, where six full
+// labels won't fit.
 const NAV = [
-  { label: 'Job Matches', to: '/jobs' },
-  { label: 'Game Plan', to: '/coach' },
-  { label: 'Profile', to: '/profile' },
-  { label: 'Cover Letters', to: '/cover' },
-  { label: 'Daily Digest', to: '/digest' },
-  { label: 'Events', to: '/events' },
+  { label: 'Job Matches', short: 'Jobs', to: '/jobs' },
+  { label: 'Game Plan', short: 'Plan', to: '/coach' },
+  { label: 'Profile', short: 'Profile', to: '/profile' },
+  { label: 'Cover Letters', short: 'Letters', to: '/cover' },
+  { label: 'Daily Digest', short: 'Digest', to: '/digest' },
+  { label: 'Events', short: 'Events', to: '/events' },
 ]
 
 function initialsFromEmail(email: string) {
@@ -50,9 +52,9 @@ export function AppShell({
   })
 
   return (
-    <div className="flex h-screen min-h-[640px] overflow-hidden bg-app font-sans text-ink">
-      {/* Sidebar */}
-      <aside className="flex w-[250px] flex-none flex-col border-r border-line-sidebar bg-sidebar px-4 py-5">
+    <div className="flex h-screen overflow-hidden bg-app font-sans text-ink md:min-h-[640px]">
+      {/* Sidebar — desktop only; mobile gets the top bar + bottom tab nav below. */}
+      <aside className="hidden w-[250px] flex-none flex-col border-r border-line-sidebar bg-sidebar px-4 py-5 md:flex">
         {/* Logo */}
         <div className="flex items-center gap-[11px] px-2 pb-[18px] pt-1">
           <div className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px] bg-accent text-[18px] font-bold text-white shadow-[0_2px_6px_rgba(0,0,0,.12)]">
@@ -115,7 +117,26 @@ export function AppShell({
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-main">
-        <header className="flex items-end justify-between gap-6 border-b border-line-soft px-[34px] pb-5 pt-[22px]">
+        {/* Mobile top bar — brand + sign out (the sidebar carries these on desktop). */}
+        <div className="flex items-center justify-between border-b border-line-sidebar bg-sidebar px-5 py-3 md:hidden">
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-accent text-[14px] font-bold text-white shadow-[0_2px_6px_rgba(0,0,0,.12)]">
+              ↗
+            </div>
+            <span className="font-display text-[15px] font-bold tracking-[-.01em]">
+              Launchpad
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={signOut}
+            className="rounded-full border border-line-soft2 px-3 py-[6px] text-[12px] font-medium text-muted"
+          >
+            Sign out
+          </button>
+        </div>
+
+        <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-line-soft px-5 pb-4 pt-4 md:px-[34px] md:pb-5 md:pt-[22px]">
           <div>
             <div className="mb-[5px] font-mono text-[11px] tracking-[.1em] text-faint2">
               {kicker}
@@ -135,17 +156,50 @@ export function AppShell({
             <button
               type="button"
               onClick={signOut}
-              className="rounded-full border border-line-soft2 px-3 py-[6px] text-[12px] font-medium text-muted transition-colors hover:bg-chip"
+              className="hidden rounded-full border border-line-soft2 px-3 py-[6px] text-[12px] font-medium text-muted transition-colors hover:bg-chip md:block"
             >
               Sign out
             </button>
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto px-[34px] pb-[60px] pt-[26px]">
+        <div className="flex-1 overflow-auto px-5 pb-[96px] pt-5 md:px-[34px] md:pb-[60px] md:pt-[26px]">
           {children}
         </div>
       </main>
+
+      {/* Mobile bottom tab nav — replaces the sidebar below md. Fixed over the
+          shell (the content area reserves pb-[96px] so nothing hides under it);
+          safe-area padding keeps it above iPhone home indicators. */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-40 flex border-t border-line-sidebar bg-sidebar md:hidden"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        {NAV.map((item) => {
+          const active = pathname === item.to
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              className={`flex min-h-[52px] flex-1 flex-col items-center justify-center gap-[5px] text-[10.5px] ${
+                active ? 'font-semibold text-ink' : 'font-medium text-muted'
+              }`}
+            >
+              <span className="relative">
+                <span
+                  className={`block h-[6px] w-[6px] rounded-[2px] ${active ? 'bg-accent' : 'bg-[#d8cfc0]'}`}
+                />
+                {item.to === '/jobs' && jobBadge != null && jobBadge > 0 && (
+                  <span className="absolute -right-[14px] -top-[6px] inline-flex h-[14px] min-w-[14px] items-center justify-center rounded-[4px] bg-accent px-[3px] font-mono text-[9px] leading-none text-white">
+                    {jobBadge}
+                  </span>
+                )}
+              </span>
+              {item.short}
+            </Link>
+          )
+        })}
+      </nav>
     </div>
   )
 }

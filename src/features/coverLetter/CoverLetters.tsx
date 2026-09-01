@@ -69,7 +69,7 @@ export function CoverLetters() {
   if (status === 'drafting' && job) {
     return (
       <div className="max-w-[760px]">
-        <div className="flex flex-col items-center rounded-[18px] border border-line bg-surface p-12 text-center">
+        <div className="flex flex-col items-center rounded-[18px] border border-line bg-surface p-7 md:p-12 text-center">
           <div className="h-[34px] w-[34px] animate-spin rounded-full border-[3px] border-line-soft border-t-accent" />
           <h3 className="mt-4 font-display text-[17px] font-semibold text-ink">
             Claude is drafting your letter…
@@ -137,7 +137,7 @@ export function CoverLetters() {
         </div>
 
         {toast && (
-          <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-[11px] bg-ink px-5 py-3 text-[13.5px] font-medium text-app shadow-[0_8px_28px_rgba(0,0,0,.22)]">
+          <div className="fixed bottom-[88px] left-1/2 z-50 md:bottom-6 -translate-x-1/2 rounded-[11px] bg-ink px-5 py-3 text-[13.5px] font-medium text-app shadow-[0_8px_28px_rgba(0,0,0,.22)]">
             {toast}
           </div>
         )}
@@ -151,7 +151,7 @@ export function CoverLetters() {
       {error && <p className="mb-4 text-[14px] text-[#b4452f]">{error}</p>}
 
       {!loading && letters.length === 0 ? (
-        <div className="rounded-[18px] border border-dashed border-[#d8cdbb] p-12 text-center">
+        <div className="rounded-[18px] border border-dashed border-[#d8cdbb] p-7 md:p-12 text-center">
           <h3 className="font-display text-[19px] font-semibold text-ink">
             No letter drafted yet
           </h3>
@@ -171,7 +171,7 @@ export function CoverLetters() {
         <ul className="flex flex-col gap-[11px]">
           {letters.map((l) => (
             <li key={l.id} className="rounded-[14px] border border-line bg-surface p-5">
-              <div className="mb-3 flex items-start justify-between gap-4">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                 <div className="font-display text-[16px] font-semibold">
                   {l.job_title} · {l.company}
                 </div>
@@ -261,7 +261,7 @@ export function CoverLetters() {
       )}
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-[11px] bg-ink px-5 py-3 text-[13.5px] font-medium text-app shadow-[0_8px_28px_rgba(0,0,0,.22)]">
+        <div className="fixed bottom-[88px] left-1/2 z-50 md:bottom-6 -translate-x-1/2 rounded-[11px] bg-ink px-5 py-3 text-[13.5px] font-medium text-app shadow-[0_8px_28px_rgba(0,0,0,.22)]">
           {toast}
         </div>
       )}

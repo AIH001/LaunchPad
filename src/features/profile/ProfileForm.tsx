@@ -432,7 +432,7 @@ export function ProfileForm() {
       </form>
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 z-50 -translate-x-1/2 rounded-[11px] bg-ink px-5 py-3 text-[13.5px] font-medium text-app shadow-[0_8px_28px_rgba(0,0,0,.22)]">
+        <div className="fixed bottom-[88px] left-1/2 z-50 md:bottom-6 -translate-x-1/2 rounded-[11px] bg-ink px-5 py-3 text-[13.5px] font-medium text-app shadow-[0_8px_28px_rgba(0,0,0,.22)]">
           {toast}
         </div>
       )}

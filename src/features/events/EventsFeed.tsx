@@ -193,7 +193,7 @@ export function EventsFeed() {
 
   if (!profile?.location) {
     return (
-      <div className="max-w-[820px] rounded-[18px] border border-dashed border-[#d8cdbb] p-12 text-center">
+      <div className="max-w-[820px] rounded-[18px] border border-dashed border-[#d8cdbb] p-7 md:p-12 text-center">
         <h3 className="font-display text-[19px] font-semibold">No location set</h3>
         <p className="mx-auto mt-2 max-w-[380px] text-[14px] text-muted">
           Add your city in your profile and we'll find tech events near you.
@@ -210,7 +210,7 @@ export function EventsFeed() {
 
   if (error) {
     return (
-      <div className="max-w-[820px] rounded-[18px] border border-dashed border-[#d8cdbb] p-12 text-center">
+      <div className="max-w-[820px] rounded-[18px] border border-dashed border-[#d8cdbb] p-7 md:p-12 text-center">
         <h3 className="font-display text-[19px] font-semibold">Could not load events</h3>
         <p className="mx-auto mt-2 max-w-[380px] text-[14px] text-muted">{error}</p>
         <button
@@ -276,7 +276,7 @@ export function EventsFeed() {
             <SkeletonCard />
           </>
         ) : visibleEvents.length === 0 ? (
-          <div className="rounded-[18px] border border-dashed border-[#d8cdbb] p-12 text-center">
+          <div className="rounded-[18px] border border-dashed border-[#d8cdbb] p-7 md:p-12 text-center">
             <h3 className="font-display text-[19px] font-semibold">
               {tab === 'worth_it' ? 'Nothing flagged worth it' : 'No events found'}
             </h3>

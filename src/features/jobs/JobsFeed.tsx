@@ -113,15 +113,25 @@ function JobDetailPanel({
   saved,
   onToggleSave,
   onDraft,
+  inline = false,
 }: {
   job: ScoredJob
   saved: boolean
   onToggleSave: () => void
   onDraft: () => void
+  // Mobile renders the panel inline under the selected list card (an off-screen
+  // sticky column is useless on a phone); desktop keeps the sticky right column.
+  inline?: boolean
 }) {
   const b = band(job.score)
   return (
-    <aside className="sticky top-0 w-[404px] flex-none self-start rounded-[18px] border border-line bg-surface p-6 shadow-[0_6px_24px_rgba(40,30,15,.05)]">
+    <aside
+      className={`rounded-[18px] border border-line bg-surface p-5 shadow-[0_6px_24px_rgba(40,30,15,.05)] md:p-6 ${
+        inline
+          ? 'w-full md:hidden'
+          : 'sticky top-0 hidden w-[404px] flex-none self-start md:block'
+      }`}
+    >
       <div className="font-mono text-[11px] tracking-[.09em] text-faint2">SELECTED ROLE</div>
       <h2 className="mb-1 mt-[7px] font-display text-[21px] font-semibold tracking-[-.01em]">
         {job.title}
@@ -418,22 +428,35 @@ function FeedView({
 
       {jobs.length > 0 && (
         <div className="flex flex-wrap items-start gap-6">
-          {/* Left: list */}
-          <div className="flex min-w-[340px] flex-1 flex-col gap-[11px]">
+          {/* Left: list. On mobile the selected job's detail renders inline,
+              right under its card — the sticky column below is desktop-only. */}
+          <div className="flex min-w-0 flex-1 flex-col gap-[11px] md:min-w-[340px]">
             <div className="pl-[2px] font-mono text-[12px] text-faint">
               {jobs.length} roles · ranked by fit
             </div>
             {jobs.map((job) => (
-              <JobListCard
-                key={job.id}
-                job={job}
-                selected={job.id === selectedId}
-                onSelect={() => onSelect(job.id)}
-              />
+              <div key={job.id} className="flex flex-col gap-[11px]">
+                <JobListCard
+                  job={job}
+                  selected={job.id === selectedId}
+                  onSelect={() => onSelect(job.id)}
+                />
+                {job.id === selectedId && (
+                  <JobDetailPanel
+                    inline
+                    job={job}
+                    saved={isSaved(job.id)}
+                    onToggleSave={() =>
+                      isSaved(job.id) ? unsave(job.id) : save(job)
+                    }
+                    onDraft={onDraft}
+                  />
+                )}
+              </div>
             ))}
           </div>
 
-          {/* Right: sticky detail */}
+          {/* Right: sticky detail (desktop) */}
           {selected && (
             <JobDetailPanel
               job={selected}
